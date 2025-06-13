@@ -72,7 +72,10 @@ connectDB();
 
 // ✅ Middleware setup
 const corsOptions = {
-  origin: 'http://localhost:3000', // Replace with your frontend URL
+  origin: [
+  'http://localhost:3000', // for local dev
+  'https://capstone-one-phi.vercel.app/' // for Vercel frontend
+],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
