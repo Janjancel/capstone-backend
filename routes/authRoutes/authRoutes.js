@@ -123,43 +123,30 @@
 
 // module.exports = router;
 
-const express = require("express");
-const router = express.Router();
-const { register, login, verifyEmail } = require("../../controllers/authController");
-const User = require("../../models/User");
+  const express = require("express");
+  const router = express.Router();
+  const { register, login, verifyEmail } = require("../../controllers/authController");
+  const User = require("../../models/User");
 
-// Middleware to handle CORS
-router.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://capstone-one-phi.vercel.app/"); // Update with your frontend domain in production
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  // Routes
+  router.post("/register", register);
+  router.post("/login", login);
+  router.get("/verify", verifyEmail);
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
+  router.post("/logout", async (req, res) => {
+    const { userId } = req.body;
 
-  next();
-});
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required." });
+    }
 
-// Routes
-router.post("/register", register);
-router.post("/login", login);
-router.get("/verify", verifyEmail);
+    try {
+      await User.findByIdAndUpdate(userId, { status: "offline" });
+      res.json({ message: "Logged out successfully." });
+    } catch (error) {
+      console.error("❌ Logout error:", error);
+      res.status(500).json({ message: "Server error during logout." });
+    }
+  });
 
-router.post("/logout", async (req, res) => {
-  const { userId } = req.body;
-
-  if (!userId) {
-    return res.status(400).json({ message: "User ID is required." });
-  }
-
-  try {
-    await User.findByIdAndUpdate(userId, { status: "offline" });
-    res.json({ message: "Logged out successfully." });
-  } catch (error) {
-    console.error("❌ Logout error:", error);
-    res.status(500).json({ message: "Server error during logout." });
-  }
-});
-
-module.exports = router;
+  module.exports = router;
