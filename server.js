@@ -72,16 +72,18 @@ connectDB();
 
 // ✅ Middleware setup
 const corsOptions = {
-  origin: [
-  'http://localhost:3000', // for local dev
-  'https://capstone-one-phi.vercel.app/' // for Vercel frontend
-],
+//   origin: [
+//   'http://localhost:3000', // for local dev
+//   'https://capstone-one-phi.vercel.app' // for Vercel frontend
+// ],
+origin: 'https://capstone-one-phi.vercel.app', // ✅ exact string, not array
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 app.use(cors(corsOptions));
+
 app.use(express.json());
 app.use('/uploads', express.static('uploads')); // Serve uploaded static files
 
