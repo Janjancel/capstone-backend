@@ -55,15 +55,16 @@ exports.register = async (req, res) => {
 
     await newUser.save();
 
-    const link = `http://localhost:3000/verify?token=${verificationToken}&email=${newUser.email}&confirm=yes`;
+    const link = `${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=yes`;
+
 
     await sendEmail(
       newUser.email,
       "Verify Your Email",
       `
         <p>We received a request to verify your account.</p>
-        <a href="https://yourapp.com/verify?token=${verificationToken}&email=${newUser.email}&confirm=yes" style="margin-right:10px;">✅ Yes, it's me</a>
-        <a href="https://yourapp.com/verify?token=${verificationToken}&email=${newUser.email}&confirm=no">❌ No, it's not me</a>
+        <a href="${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=yes" style="margin-right:10px;">✅ Yes, it's me</a>
+        <a href="${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=no">❌ No, it's not me</a>
       `
     );
 
