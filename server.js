@@ -1,0 +1,112 @@
+
+
+// const express = require('express');
+// const cors = require('cors');
+// require('dotenv').config();
+
+// const heritageRoutes = require('./routes/heritageRoutes');
+// const authRoutes = require('./routes/authRoutes');
+// const userRoutes = require('./routes/userRoutes');
+// const db = require('./config/db'); // PostgreSQL connection
+
+// const app = express();
+// const PORT = process.env.PORT || 5000;
+
+// // ✅ CORS setup
+// const corsOptions = {
+//   origin: 'http://localhost:3000',  // Your React frontend's origin
+//   credentials: true,                // Allow credentials like cookies to be sent
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed HTTP methods
+//   allowedHeaders: ['Content-Type', 'Authorization'],    // Allowed headers
+// };
+
+// app.use(cors(corsOptions));  // Apply CORS to all routes
+// app.options('*', cors(corsOptions)); // Handle preflight requests
+
+// app.use(express.json()); // Parse incoming JSON requests
+
+// // ✅ Connect to PostgreSQL
+// db.connect()
+//   .then(() => console.log('✅ PostgreSQL connected'))
+//   .catch(err => console.error('❌ PostgreSQL connection error:', err));
+
+// // ✅ Routes
+// app.use('/api/heritage', heritageRoutes);
+// app.use('/api/auth', authRoutes);
+// app.use('/api/users', userRoutes);
+
+// // ✅ Test route to confirm CORS is working
+// app.get('/api/test', (req, res) => {
+//   res.json({ message: 'CORS working' });
+// });
+
+// // ✅ Start the server
+// app.listen(PORT, () => {
+//   console.log(`🚀 Server running on http://localhost:${PORT}`);
+// });
+
+
+// server.js
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
+const connectDB = require('./config/db'); // ✅ MongoDB connection file
+
+const heritageRoutes = require('./routes/heritageRoutes');
+const authRoutes = require('./routes/authRoutes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const demolishReqRoutes = require('./routes/demolishReqRoutes');
+const itemsRoutes = require("./routes/itemsRoutes");
+const cartRoutes = require("./routes/Cart");
+const orderRoutes = require("./routes/orders");
+const addressRouter = require('./routes/addressRoutes');
+const notifRoutes = require("./routes/notifications");
+
+// const profilePictureRoutes = require("./routes/ProfilePicture");
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// ✅ Connect to MongoDB
+connectDB();
+
+// ✅ Middleware setup
+const corsOptions = {
+  origin: 'http://localhost:3000', // Replace with your frontend URL
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use('/uploads', express.static('uploads')); // Serve uploaded static files
+
+// ✅ Routes
+app.use('/api/heritage', heritageRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/demolish', demolishReqRoutes);
+app.use("/api/items", itemsRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/orders", orderRoutes);
+app.use('/api/address', addressRouter);
+app.use("/api/notifications", notifRoutes);
+// app.use("/api/users", profilePictureRoutes);
+
+
+
+
+// ✅ Health Check Route
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'CORS and MongoDB working' });
+});
+
+// Serve uploaded files from the 'uploads' folder
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+
+// ✅ Start server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
