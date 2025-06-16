@@ -149,4 +149,24 @@
     }
   });
 
+
+  // POST /api/auth/status-check
+router.post('/status-check', async (req, res) => {
+  const { identifier } = req.body;
+
+  try {
+    const user = await User.findOne({
+      $or: [{ email: identifier }, { username: identifier }]
+    });
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    res.json({ status: user.status });
+  } catch (err) {
+    console.error("Error checking status:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
   module.exports = router;

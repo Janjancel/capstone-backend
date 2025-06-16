@@ -94,6 +94,18 @@ router.delete("/users/:userId/notifications", async (req, res) => {
   }
 });
 
+// ✅ Get all notifications (for admin dashboard)
+router.get("/", async (req, res) => {
+  try {
+    const notifications = await Notification.find().sort({ createdAt: -1 });
+    res.json(notifications);
+  } catch (err) {
+    console.error("Error fetching notifications:", err);
+    res.status(500).json({ message: "Failed to fetch notifications" });
+  }
+});
+
+
 
 // router.get("/users/:userId/notifications", async (req, res) => {
 //   try {

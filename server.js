@@ -61,6 +61,8 @@ const cartRoutes = require("./routes/Cart");
 const orderRoutes = require("./routes/orders");
 const addressRouter = require('./routes/addressRoutes');
 const notifRoutes = require("./routes/notifications");
+const salesRoutes = require("./routes/sales");
+
 
 // const profilePictureRoutes = require("./routes/ProfilePicture");
 
@@ -72,18 +74,18 @@ connectDB();
 
 // ✅ Middleware setup
 const corsOptions = {
-//   origin: [
-//   'http://localhost:3000', // for local dev
-//   'https://capstone-one-phi.vercel.app' // for Vercel frontend
-// ],
-origin: 'https://capstone-one-phi.vercel.app', // ✅ exact string, not array
+  origin: [
+  'http://localhost:3000', // for local dev
+  'https://capstone-one-phi.vercel.app' // for Vercel frontend
+],
+// origin: 'https://capstone-one-phi.vercel.app', // ✅ exact string, not array
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 app.use(cors(corsOptions));
-
+// app.options('*', cors(corsOptions)); // Handles preflight requests
 app.use(express.json());
 app.use('/uploads', express.static('uploads')); // Serve uploaded static files
 
@@ -98,6 +100,8 @@ app.use("/api/orders", orderRoutes);
 app.use('/api/address', addressRouter);
 app.use("/api/notifications", notifRoutes);
 // app.use("/api/users", profilePictureRoutes);
+app.use("/api/sales", salesRoutes);
+
 
 
 

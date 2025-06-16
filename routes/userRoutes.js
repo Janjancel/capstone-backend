@@ -146,13 +146,19 @@ router.get('/statuses', async (req, res) => {
   }
 });
 
-// ✅ GET /api/users/status/:userId - Get single user status
-router.get('/status/:userId', async (req, res) => {
+// PATCH /api/users/status/:userId
+router.patch('/status/:userId', async (req, res) => {
+  const { status } = req.body;
   try {
     const user = await User.findById(req.params.userId);
-    res.json({ status: user?.status || 'offline' });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.status = status;
+    await user.save();
+    res.json({ message: "Status updated successfully" });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch user status' });
+    console.error("Failed to update user status:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -239,16 +245,40 @@ router.get("/admin", authMiddleware, async (req, res) => {
   }
 });
 
-
-// routes/users.js
+// ✅ GET all users with full info needed for frontend display (for AccountsDashboard)
 router.get("/", async (req, res) => {
   try {
-    const users = await User.find({}, "_id email displayName"); // Limit fields
+    const users = await User.find({}, "_id username email status role profilePic");
     res.json(users);
   } catch (err) {
+    console.error("Error fetching users:", err);
     res.status(500).json({ message: "Failed to fetch users" });
   }
 });
+
+
+
+// // routes/users.js
+// router.get("/", async (req, res) => {
+//   try {
+//     const users = await User.find({}, "_id email displayName"); // Limit fields
+//     res.json(users);
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to fetch users" });
+//   }
+// });
+
+// // ✅ GET all users with full info needed for frontend display
+// router.get("/", async (req, res) => {
+//   try {
+//     const users = await User.find({}, "_id username email status role profilePic");
+//     res.json(users);
+//   } catch (err) {
+//     console.error("Error fetching users:", err);
+//     res.status(500).json({ message: "Failed to fetch users" });
+//   }
+// });
+
 
 
 module.exports = router;
