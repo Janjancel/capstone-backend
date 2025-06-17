@@ -55,14 +55,15 @@ const connectDB = require('./config/db'); // ✅ MongoDB connection file
 const heritageRoutes = require('./routes/heritageRoutes');
 const authRoutes = require('./routes/authRoutes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
-const demolishReqRoutes = require('./routes/demolishReqRoutes');
+// const demolishReqRoutes = require('./routes/demolishReqRoutes');
 const itemsRoutes = require("./routes/itemsRoutes");
 const cartRoutes = require("./routes/Cart");
 const orderRoutes = require("./routes/orders");
 const addressRouter = require('./routes/addressRoutes');
 const notifRoutes = require("./routes/notifications");
 const salesRoutes = require("./routes/sales");
-
+const sellRoutes = require("./routes/sellRoutes");
+const demolishRoutes = require("./routes/demolish");
 
 // const profilePictureRoutes = require("./routes/ProfilePicture");
 
@@ -93,7 +94,7 @@ app.use('/uploads', express.static('uploads')); // Serve uploaded static files
 app.use('/api/heritage', heritageRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/demolish', demolishReqRoutes);
+// app.use('/api/demolish', demolishReqRoutes);
 app.use("/api/items", itemsRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
@@ -101,7 +102,8 @@ app.use('/api/address', addressRouter);
 app.use("/api/notifications", notifRoutes);
 // app.use("/api/users", profilePictureRoutes);
 app.use("/api/sales", salesRoutes);
-
+app.use("/api/sell", sellRoutes);
+app.use("/api/demolish", demolishRoutes);
 
 
 
