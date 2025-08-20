@@ -64,6 +64,8 @@ const notifRoutes = require("./routes/notifications");
 const salesRoutes = require("./routes/sales");
 const sellRoutes = require("./routes/sellRoutes");
 const demolishRoutes = require("./routes/demolish");
+const googleRegisterRoutes = require('./routes/authRoutes/googleRegister');
+
 
 // const profilePictureRoutes = require("./routes/ProfilePicture");
 
@@ -105,7 +107,7 @@ app.use("/api/sales", salesRoutes);
 app.use("/api/sell", sellRoutes);
 app.use("/api/demolish", demolishRoutes);
 
-
+app.use('/api/auth/google-register', googleRegisterRoutes);
 
 
 // ✅ Health Check Route
@@ -120,4 +122,10 @@ app.get('/api/test', (req, res) => {
 // ✅ Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
+});
+
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  next();
 });
