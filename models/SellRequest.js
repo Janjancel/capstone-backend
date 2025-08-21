@@ -11,7 +11,8 @@ const SellRequestSchema = new mongoose.Schema({
     lat: Number,
     lng: Number,
   },
-  status: { type: String, default: "pending" },
+  // status: { type: String, default: "pending" },
+  status: { type: String, enum: ["pending", "accepted", "declined"], default: "pending" },
   createdAt: { type: Date, default: Date.now },
 });
 
