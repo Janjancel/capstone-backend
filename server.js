@@ -72,6 +72,13 @@ const googleRegisterRoutes = require('./routes/authRoutes/googleRegister');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+
+// CORS setup
+app.use(cors({
+  origin: "http://localhost:3000", // or your frontend domain
+  credentials: true,
+}));
+
 // ✅ Connect to MongoDB
 connectDB();
 
@@ -125,6 +132,8 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 app.use((req, res, next) => {
-  console.log("Incoming request:", req.method, req.url);
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
   next();
 });
+
