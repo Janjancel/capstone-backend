@@ -72,5 +72,13 @@ userSchema.methods.comparePassword = function (inputPassword) {
   return bcrypt.compare(inputPassword, this.password);
 };
 
+userSchema.statics.updateStatus = async function (userId, status) {
+  return this.findByIdAndUpdate(
+    userId,
+    { status, lastLogin: new Date() },
+    { new: true } // return the updated document
+  );
+};
+
 module.exports = mongoose.model("User", userSchema);
 

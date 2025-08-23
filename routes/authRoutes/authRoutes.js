@@ -192,20 +192,64 @@ const generateToken = (user) => {
 };
 
 // GOOGLE LOGIN
+// router.post("/google", async (req, res) => {
+//   const { token: googleToken } = req.body;
+
+//   if (!googleToken) return res.status(400).json({ message: "No token provided." });
+
+//   try {
+//     const ticket = await client.verifyIdToken({
+//       idToken: googleToken,
+//       audience: process.env.GOOGLE_CLIENT_ID,
+//     });
+
+//     const payload = ticket.getPayload();
+//     const { email, name, picture } = payload;
+
+//     let user = await User.findOne({ email });
+
+//     if (!user) {
+//       // Create a new user if not exists
+//       user = new User({
+//         username: name.replace(/\s+/g, "").toLowerCase(),
+//         email,
+//         password: Math.random().toString(36).slice(-8), // random password
+//         isVerified: true,
+//         profilePic: picture,
+//       });
+//       await user.save();
+//     }
+
+//     const jwtToken = generateToken(user);
+
+//     user.lastLogin = new Date();
+//     await user.save();
+
+//     res.json({ token: jwtToken, user });
+//   } catch (err) {
+//     console.error("Google login error:", err);
+//     res.status(500).json({ message: "Google authentication failed." });
+//   }
+// });
+
 router.post("/google", async (req, res) => {
   const { token: googleToken } = req.body;
 
-  if (!googleToken) return res.status(400).json({ message: "No token provided." });
+  if (!googleToken) 
+    return res.status(400).json({ message: "No token provided." });
 
   try {
+    // Verify Google ID token
     const ticket = await client.verifyIdToken({
       idToken: googleToken,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
 
     const payload = ticket.getPayload();
-    const { email, name, picture } = payload;
+    const email = payload.email.toLowerCase(); // ✅ lowercase
+    const { name, picture } = payload;
 
+    // Find existing user
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -220,17 +264,33 @@ router.post("/google", async (req, res) => {
       await user.save();
     }
 
+    // Generate JWT token
     const jwtToken = generateToken(user);
 
+    // Update status to online and log last login
+    user.status = "online";
     user.lastLogin = new Date();
     await user.save();
 
-    res.json({ token: jwtToken, user });
+    // Respond with token and user info
+    res.status(200).json({
+      token: jwtToken,
+      user: {
+        _id: user._id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        status: user.status,
+        profilePic: user.profilePic,
+        lastLogin: user.lastLogin,
+      },
+    });
   } catch (err) {
     console.error("Google login error:", err);
     res.status(500).json({ message: "Google authentication failed." });
   }
 });
+
 
 module.exports = router;
 

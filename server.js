@@ -74,27 +74,50 @@ const PORT = process.env.PORT || 5000;
 
 
 // CORS setup
-app.use(cors({
-  origin: "http://localhost:3000", // or your frontend domain
-  credentials: true,
-}));
+// app.use(cors({
+//   origin: "http://localhost:3000", // or your frontend domain
+//   credentials: true,
+// }));
 
 // ✅ Connect to MongoDB
 connectDB();
 
-// ✅ Middleware setup
+const allowedOrigins = [
+  "http://localhost:3000",               // local dev
+  "https://capstone-one-phi.vercel.app" // production frontend
+];
+
 const corsOptions = {
-  origin: [
-  'http://localhost:3000', // for local dev
-  'https://capstone-one-phi.vercel.app' // for Vercel frontend
-],
-// origin: 'https://capstone-one-phi.vercel.app', // ✅ exact string, not array
+  origin: function(origin, callback) {
+    // allow requests with no origin (like Postman or mobile apps)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true); // allowed
+    } else {
+      callback(new Error(`CORS policy does not allow access from ${origin}`), false);
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
+
+// ✅ Middleware setup
+// const corsOptions = {
+//   origin: [
+//   'http://localhost:3000', // for local dev
+//   'https://capstone-one-phi.vercel.app' // for Vercel frontend
+// ],
+// // origin: 'https://capstone-one-phi.vercel.app', // ✅ exact string, not array
+//   credentials: true,
+//   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization'],
+// };
+
+// app.use(cors(corsOptions));
 // app.options('*', cors(corsOptions)); // Handles preflight requests
 app.use(express.json());
 app.use('/uploads', express.static('uploads')); // Serve uploaded static files
