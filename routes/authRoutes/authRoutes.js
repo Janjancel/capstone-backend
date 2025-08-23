@@ -122,9 +122,9 @@
 
 
 // module.exports = router;
-import jwt from "jsonwebtoken";
-// import { OAuth2Client } from "google-auth-library";
 const express = require("express");
+const jwt = require("jsonwebtoken");
+const { OAuth2Client } = require("google-auth-library");
 const router = express.Router();
 const { register, login, verifyEmail } = require("../../controllers/authController");
 const User = require("../../models/User");
