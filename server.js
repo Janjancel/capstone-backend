@@ -107,7 +107,7 @@ app.use("/api/sales", salesRoutes);
 app.use("/api/sell", sellRoutes);
 app.use("/api/demolish", demolishRoutes);
 
-app.use('/api/auth/google-register', googleRegisterRoutes);
+app.use('/api/google-register', googleRegisterRoutes);
 
 
 // ✅ Health Check Route
