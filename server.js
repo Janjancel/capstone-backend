@@ -51,6 +51,9 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const connectDB = require('./config/db'); // ✅ MongoDB connection file
+const path = require("path");
+const multer = require("multer");
+const router = express.Router();
 
 const heritageRoutes = require('./routes/heritageRoutes');
 const authRoutes = require('./routes/authRoutes/authRoutes');
@@ -65,6 +68,7 @@ const salesRoutes = require("./routes/sales");
 const sellRoutes = require("./routes/sellRoutes");
 const demolishRoutes = require("./routes/demolish");
 const googleRegisterRoutes = require('./routes/authRoutes/googleRegister');
+const uploadRoutes = require("./routes/upload");
 
 
 // const profilePictureRoutes = require("./routes/ProfilePicture");
@@ -105,6 +109,11 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Increase payload limit to 50MB (adjust as needed)
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+
 // ✅ Middleware setup
 // const corsOptions = {
 //   origin: [
@@ -120,7 +129,9 @@ app.use(cors(corsOptions));
 // app.use(cors(corsOptions));
 // app.options('*', cors(corsOptions)); // Handles preflight requests
 app.use(express.json());
-app.use('/uploads', express.static('uploads')); // Serve uploaded static files
+// app.use('/uploads', express.static('uploads')); // Serve uploaded static files
+// Serve files in the uploads folder as static files
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ✅ Routes
 app.use('/api/heritage', heritageRoutes);
@@ -138,8 +149,9 @@ app.use("/api/sell", sellRoutes);
 app.use("/api/demolish", demolishRoutes);
 
 app.use('/api/auth/google-register', googleRegisterRoutes);
+app.use("/api/upload", uploadRoutes)
 
-
+app.use("/uploads", express.static("uploads"));
 // ✅ Health Check Route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'CORS and MongoDB working' });
@@ -148,6 +160,25 @@ app.get('/api/test', (req, res) => {
 // Serve uploaded files from the 'uploads' folder
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, "uploads/"); // folder to save images
+//   },
+//   filename: function (req, file, cb) {
+//     cb(null, Date.now() + "-" + file.originalname); // unique filename
+//   },
+// });
+
+// const upload = multer({ storage,
+//     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max per file
+//  });
+
+// app.post("/api/upload", upload.single("image"), (req, res) => {
+//   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  
+//   // Send back the URL of the uploaded file
+//   res.json({ imageUrl: `/uploads/${req.file.filename}` });
+// });
 
 // ✅ Start server
 app.listen(PORT, '0.0.0.0', () => {

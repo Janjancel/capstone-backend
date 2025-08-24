@@ -82,10 +82,17 @@ const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
 
-// ✅ Create a new order
+// Create a new order
 router.post("/", async (req, res) => {
   try {
     const newOrder = new Order(req.body);
+
+    // Calculate total automatically
+    newOrder.total = newOrder.items.reduce(
+      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
+      0
+    );
+
     await newOrder.save();
     res.status(201).json(newOrder);
   } catch (error) {
@@ -94,10 +101,10 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ Get all orders (Admin use)
+// Get all orders (admin)
 router.get("/", async (req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 });
+    const orders = await Order.find().populate("userId", "email").sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
     console.error("Fetch all orders error:", error);
@@ -105,7 +112,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Get all orders for a specific user
+// Get orders for a specific user
 router.get("/user/:userId", async (req, res) => {
   try {
     const orders = await Order.find({ userId: req.params.userId }).sort({ createdAt: -1 });
@@ -116,13 +123,11 @@ router.get("/user/:userId", async (req, res) => {
   }
 });
 
-// ✅ Get full order details by ID
+// Get order by ID
 router.get("/:id", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ error: "Order not found" });
-    }
+    const order = await Order.findById(req.params.id).populate("userId", "email");
+    if (!order) return res.status(404).json({ error: "Order not found" });
     res.json(order);
   } catch (error) {
     console.error("Fetch order by ID error:", error);
@@ -130,7 +135,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ✅ Update order status
+// Update order status
 router.put("/:id/status", async (req, res) => {
   const { status } = req.body;
   try {
@@ -139,9 +144,7 @@ router.put("/:id/status", async (req, res) => {
       { status },
       { new: true }
     );
-    if (!updatedOrder) {
-      return res.status(404).json({ error: "Order not found" });
-    }
+    if (!updatedOrder) return res.status(404).json({ error: "Order not found" });
     res.json(updatedOrder);
   } catch (error) {
     console.error("Update order status error:", error);
@@ -149,20 +152,15 @@ router.put("/:id/status", async (req, res) => {
   }
 });
 
-// ✅ Request order cancellation
+// Request order cancellation
 router.patch("/:id/cancel", async (req, res) => {
   try {
     const updatedOrder = await Order.findByIdAndUpdate(
       req.params.id,
-      {
-        status: "Cancellation Requested",
-        cancelledAt: new Date(),
-      },
+      { status: "Cancellation Requested", cancelledAt: new Date() },
       { new: true }
     );
-    if (!updatedOrder) {
-      return res.status(404).json({ error: "Order not found" });
-    }
+    if (!updatedOrder) return res.status(404).json({ error: "Order not found" });
     res.json(updatedOrder);
   } catch (error) {
     console.error("Cancel order request error:", error);
@@ -171,3 +169,98 @@ router.patch("/:id/cancel", async (req, res) => {
 });
 
 module.exports = router;
+
+
+// const express = require("express");
+// const router = express.Router();
+// const Order = require("../models/Order");
+
+// // ✅ Create a new order
+// router.post("/", async (req, res) => {
+//   try {
+//     const newOrder = new Order(req.body);
+//     await newOrder.save();
+//     res.status(201).json(newOrder);
+//   } catch (error) {
+//     console.error("Order creation error:", error);
+//     res.status(500).json({ error: "Failed to create order" });
+//   }
+// });
+
+// // ✅ Get all orders (Admin use)
+// router.get("/", async (req, res) => {
+//   try {
+//     const orders = await Order.find().sort({ createdAt: -1 });
+//     res.json(orders);
+//   } catch (error) {
+//     console.error("Fetch all orders error:", error);
+//     res.status(500).json({ error: "Failed to fetch orders" });
+//   }
+// });
+
+// // ✅ Get all orders for a specific user
+// router.get("/user/:userId", async (req, res) => {
+//   try {
+//     const orders = await Order.find({ userId: req.params.userId }).sort({ createdAt: -1 });
+//     res.json(orders);
+//   } catch (error) {
+//     console.error("Fetch user orders error:", error);
+//     res.status(500).json({ error: "Failed to fetch user orders" });
+//   }
+// });
+
+// // ✅ Get full order details by ID
+// router.get("/:id", async (req, res) => {
+//   try {
+//     const order = await Order.findById(req.params.id);
+//     if (!order) {
+//       return res.status(404).json({ error: "Order not found" });
+//     }
+//     res.json(order);
+//   } catch (error) {
+//     console.error("Fetch order by ID error:", error);
+//     res.status(500).json({ error: "Failed to fetch order" });
+//   }
+// });
+
+// // ✅ Update order status
+// router.put("/:id/status", async (req, res) => {
+//   const { status } = req.body;
+//   try {
+//     const updatedOrder = await Order.findByIdAndUpdate(
+//       req.params.id,
+//       { status },
+//       { new: true }
+//     );
+//     if (!updatedOrder) {
+//       return res.status(404).json({ error: "Order not found" });
+//     }
+//     res.json(updatedOrder);
+//   } catch (error) {
+//     console.error("Update order status error:", error);
+//     res.status(500).json({ error: "Failed to update order status" });
+//   }
+// });
+
+// // ✅ Request order cancellation
+// router.patch("/:id/cancel", async (req, res) => {
+//   try {
+//     const updatedOrder = await Order.findByIdAndUpdate(
+//       req.params.id,
+//       {
+//         status: "Cancellation Requested",
+//         cancelledAt: new Date(),
+//       },
+//       { new: true }
+//     );
+//     if (!updatedOrder) {
+//       return res.status(404).json({ error: "Order not found" });
+//     }
+//     res.json(updatedOrder);
+//   } catch (error) {
+//     console.error("Cancel order request error:", error);
+//     res.status(500).json({ error: "Failed to request cancellation" });
+//   }
+// });
+
+// module.exports = router;
