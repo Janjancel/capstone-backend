@@ -78,20 +78,73 @@
 
 // module.exports = router;
 
+// const express = require("express");
+// const router = express.Router();
+// const Order = require("../models/Order");
+
+// // Create a new order
+// router.post("/", async (req, res) => {
+//   try {
+//     const newOrder = new Order(req.body);
+
+//     // Calculate total automatically
+//     newOrder.total = newOrder.items.reduce(
+//       (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
+//       0
+//     );
+
+//     await newOrder.save();
+//     res.status(201).json(newOrder);
+//   } catch (error) {
+//     console.error("Order creation error:", error);
+//     res.status(500).json({ error: "Failed to create order" });
+//   }
+// });
 const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
+const cloudinary = require("../utils/cloudinary");
+const multer = require("multer");
 
-// Create a new order
-router.post("/", async (req, res) => {
+// Multer setup (store file in memory before upload to Cloudinary)
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+// Create a new order (with file upload)
+router.post("/", upload.array("images"), async (req, res) => {
   try {
-    const newOrder = new Order(req.body);
+    let uploadedItems = [];
 
-    // Calculate total automatically
-    newOrder.total = newOrder.items.reduce(
-      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
-      0
-    );
+    // Upload each image to Cloudinary if provided
+    if (req.files && req.files.length > 0) {
+      uploadedItems = await Promise.all(
+        req.files.map(async (file) => {
+          const result = await cloudinary.uploader.upload_stream(
+            { folder: "orders" },
+            (error, result) => {
+              if (error) throw error;
+              return result.secure_url;
+            }
+          );
+
+          return result;
+        })
+      );
+    }
+
+    // Build order items (map body data with uploaded image URLs)
+    const items = JSON.parse(req.body.items).map((item, idx) => ({
+      ...item,
+      image: uploadedItems[idx] || item.image, // fallback if no new image
+    }));
+
+    const newOrder = new Order({
+      userId: req.body.userId,
+      items,
+      total: items.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 0), 0),
+      address: JSON.parse(req.body.address),
+      notes: req.body.notes || "",
+    });
 
     await newOrder.save();
     res.status(201).json(newOrder);
@@ -100,6 +153,7 @@ router.post("/", async (req, res) => {
     res.status(500).json({ error: "Failed to create order" });
   }
 });
+
 
 // Get all orders (admin)
 router.get("/", async (req, res) => {
