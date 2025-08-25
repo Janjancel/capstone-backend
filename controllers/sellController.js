@@ -79,17 +79,26 @@
 
 const mongoose = require("mongoose");
 const SellRequest = require("../models/SellRequest");
+const cloudinary = require("../config/cloudinary"); // Make sure you have this
 
 // Create a new sell request
-// Create new sell request
 exports.createSell = async (req, res) => {
-  const { userId, name, contact, price, description, image, location } = req.body;
+  const { userId, name, contact, price, description, location } = req.body;
+  let image = null;
 
   if (!userId || !name || !contact || !price || !description || !location) {
     return res.status(400).json({ success: false, message: "Missing required fields" });
   }
 
   try {
+    // If file uploaded, upload to Cloudinary
+    if (req.file) {
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: "sell_images",
+      });
+      image = result.secure_url;
+    }
+
     const newSell = await SellRequest.create({
       userId,
       name,
@@ -169,6 +178,7 @@ exports.deleteSell = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 };
+
 
 
 // const mongoose = require("mongoose");

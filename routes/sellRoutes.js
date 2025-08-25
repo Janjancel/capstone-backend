@@ -27,22 +27,35 @@
 
 const express = require("express");
 const router = express.Router();
-const { createSell, getSellRequests, updateStatus, deleteSell } = require("../controllers/sellController");
+const multer = require("multer");
+const path = require("path");
 
-// router.get("/", getSellRequests);
-// router.patch("/:id", updateStatus);
-// router.delete("/:id", deleteSell);
+const {
+  createSell,
+  getSellRequests,
+  updateStatus,
+  deleteSell,
+} = require("../controllers/sellController");
 
-// Create new sell request
-router.post("/", sellController.createSell);
+// Multer config for file upload
+const storage = multer.diskStorage({
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+const upload = multer({ storage });
+
+// Create new sell request with optional image upload
+router.post("/", upload.single("image"), createSell);
 
 // Get all sell requests
-router.get("/", sellController.getSellRequests);
+router.get("/", getSellRequests);
 
-// Update status
-router.put("/:id/status", sellController.updateStatus);
+// Update status (Accept/Decline)
+router.put("/:id/status", updateStatus);
 
 // Delete sell request
-router.delete("/:id", sellController.deleteSell);
+router.delete("/:id", deleteSell);
 
 module.exports = router;
+
