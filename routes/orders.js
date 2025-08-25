@@ -103,7 +103,7 @@
 const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
-const cloudinary = require("../utils/cloudinary");
+const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
 
 // Multer setup (store file in memory before upload to Cloudinary)
