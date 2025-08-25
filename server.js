@@ -149,10 +149,10 @@ app.use("/api/sell", sellRoutes);
 app.use("/api/demolish", demolishRoutes);
 
 app.use('/api/auth/google-register', googleRegisterRoutes);
-app.use("/api/upload", uploadRoutes)
-app.use("/api", uploadRoutes);
+// app.use("/api/upload", uploadRoutes)
+// app.use("/api", uploadRoutes);
 
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // ✅ Health Check Route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'CORS and MongoDB working' });

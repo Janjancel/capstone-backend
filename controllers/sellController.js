@@ -107,7 +107,7 @@ exports.createSell = async (req, res) => {
       description,
       image: image || null,
       location,
-      status: "Pending",
+      status: "pending",
       createdAt: new Date(),
     });
 
