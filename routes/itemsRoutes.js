@@ -214,6 +214,7 @@ router.post("/", upload.array("images", 5), async (req, res) => {
       price: req.body.price,
       origin: req.body.origin,
       age: req.body.age,
+      category: req.body.category, // ✅ save category
       images: imageUrls, // ✅ save array of URLs
     });
 
@@ -226,24 +227,63 @@ router.post("/", upload.array("images", 5), async (req, res) => {
 });
 
 // PUT update item (with optional new images)
+// router.put("/:id", upload.array("images", 5), async (req, res) => {
+//   try {
+//     let updateData = { ...req.body };
+
+//     if (req.files && req.files.length > 0) {
+//       const uploadPromises = req.files.map((file) =>
+//         cloudinary.uploader.upload(file.path, { folder: "items" })
+//       );
+
+//       const results = await Promise.all(uploadPromises);
+//       updateData.images = results.map((result) => result.secure_url);
+//     }
+
+//     const updatedItem = await Item.findByIdAndUpdate(
+//       req.params.id,
+//       updateData,
+//       { new: true }
+//     );
+
+//     res.json(updatedItem);
+//   } catch (err) {
+//     console.error("Item update error:", err);
+//     res.status(500).json({ error: "Failed to update item" });
+//   }
+// });
+
 router.put("/:id", upload.array("images", 5), async (req, res) => {
   try {
     let updateData = { ...req.body };
 
+    // Find existing item
+    const existingItem = await Item.findById(req.params.id);
+    if (!existingItem) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+
+    // Handle new image uploads
     if (req.files && req.files.length > 0) {
       const uploadPromises = req.files.map((file) =>
         cloudinary.uploader.upload(file.path, { folder: "items" })
       );
 
       const results = await Promise.all(uploadPromises);
-      updateData.images = results.map((result) => result.secure_url);
+
+      // ✅ Append new images to existing ones (instead of replacing)
+      updateData.images = [
+        ...(existingItem.images || []),
+        ...results.map((result) => result.secure_url),
+      ];
+    } else {
+      // ✅ Keep existing images if none uploaded
+      updateData.images = existingItem.images;
     }
 
-    const updatedItem = await Item.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    );
+    const updatedItem = await Item.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+    });
 
     res.json(updatedItem);
   } catch (err) {
@@ -251,6 +291,7 @@ router.put("/:id", upload.array("images", 5), async (req, res) => {
     res.status(500).json({ error: "Failed to update item" });
   }
 });
+
 
 // DELETE item
 router.delete("/:id", async (req, res) => {
