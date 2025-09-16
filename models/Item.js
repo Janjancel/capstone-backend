@@ -20,7 +20,8 @@ const ItemSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   origin: String,
   age: String,
-  image: { type: String }, // Cloudinary URL
+  // image: { type: String }, // Cloudinary URL
+  images: [String], // ✅ array of URLs
   createdAt: { type: Date, default: Date.now },
 });
 
