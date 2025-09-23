@@ -226,32 +226,6 @@ router.post("/", upload.array("images", 5), async (req, res) => {
   }
 });
 
-// PUT update item (with optional new images)
-// router.put("/:id", upload.array("images", 5), async (req, res) => {
-//   try {
-//     let updateData = { ...req.body };
-
-//     if (req.files && req.files.length > 0) {
-//       const uploadPromises = req.files.map((file) =>
-//         cloudinary.uploader.upload(file.path, { folder: "items" })
-//       );
-
-//       const results = await Promise.all(uploadPromises);
-//       updateData.images = results.map((result) => result.secure_url);
-//     }
-
-//     const updatedItem = await Item.findByIdAndUpdate(
-//       req.params.id,
-//       updateData,
-//       { new: true }
-//     );
-
-//     res.json(updatedItem);
-//   } catch (err) {
-//     console.error("Item update error:", err);
-//     res.status(500).json({ error: "Failed to update item" });
-//   }
-// });
 
 router.put("/:id", upload.array("images", 5), async (req, res) => {
   try {
@@ -314,5 +288,29 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// POST add item as featured
+const FeaturedItem = require("../models/FeaturedItem");
+
+router.post("/:id/feature", async (req, res) => {
+  try {
+    const item = await Item.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: "Item not found" });
+
+    const existing = await FeaturedItem.findOne({ item: item._id });
+    if (existing) {
+      return res.status(400).json({ error: "Item already featured" });
+    }
+
+    const featured = new FeaturedItem({ item: item._id });
+    await featured.save();
+
+    res.status(201).json(featured);
+  } catch (err) {
+    console.error("Error featuring item:", err);
+    res.status(500).json({ error: "Failed to feature item" });
+  }
+});
+
 
 module.exports = router;
