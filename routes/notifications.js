@@ -1,116 +1,123 @@
+// backend/routes/notifications.js
+const express = require("express");
+const router = express.Router();
+const Notification = require("../models/Notification");
 
-
-// // routes/notifications.js
-// router.post("/", async (req, res) => {
-//   try {
-//     const notification = new Notification(req.body);
-//     await notification.save();
-//     res.status(201).json(notification);
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to create notification" });
-//   }
-// });
-
+// // GET user notifications
 // router.get("/users/:userId/notifications", async (req, res) => {
 //   try {
-//     const notifications = await Notification.find({ userId: req.params.userId }).sort({ createdAt: -1 });
-//     res.json(notifications);
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to get notifications" });
-//   }
-// });
-
-// router.patch("/users/:userId/notifications/:notifId", async (req, res) => {
-//   try {
-//     const updated = await Notification.findOneAndUpdate(
-//       { _id: req.params.notifId, userId: req.params.userId },
-//       { read: true },
-//       { new: true }
-//     );
-//     res.json(updated);
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to mark as read" });
-//   }
-// });
-
-// router.delete("/users/:userId/notifications", async (req, res) => {
-//   try {
-//     await Notification.deleteMany({ userId: req.params.userId });
-//     res.json({ message: "All notifications cleared" });
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to clear notifications" });
-//   }
-// });
-
-// // ✅ Get all notifications (for admin dashboard)
-// router.get("/", async (req, res) => {
-//   try {
-//     const notifications = await Notification.find().sort({ createdAt: -1 });
-//     res.json(notifications);
-//   } catch (err) {
-//     console.error("Error fetching notifications:", err);
+//     const notifs = await Notification.find({ userId: req.params.userId }).sort({ createdAt: -1 });
+//     res.json(notifs);
+//   } catch {
 //     res.status(500).json({ message: "Failed to fetch notifications" });
 //   }
 // });
 
+// // PATCH mark notification as read
+// router.patch("/users/:userId/notifications/:notifId", async (req, res) => {
+//   try {
+//     const updated = await Notification.findByIdAndUpdate(req.params.notifId, { read: true }, { new: true });
+//     res.json(updated);
+//   } catch {
+//     res.status(500).json({ message: "Failed to mark as read" });
+//   }
+// });
 
-// module.exports = router;
+// // DELETE all notifications
+// router.delete("/users/:userId/notifications", async (req, res) => {
+//   try {
+//     await Notification.deleteMany({ userId: req.params.userId });
+//     res.json({ message: "Notifications cleared" });
+//   } catch {
+//     res.status(500).json({ message: "Failed to clear notifications" });
+//   }
+// });
+
+// // POST create new notification
+// router.post("/", async (req, res) => {
+//   try {
+//     const notif = new Notification({
+//       userId: req.body.userId,
+//       orderId: req.body.orderId,
+//       status: req.body.status,
+//       message: req.body.message,
+//       role: req.body.role,
+//     });
+
+//     await notif.save();
+//     res.status(201).json(notif);
+//   } catch (err) {
+//     console.error("Notification save failed:", err);
+//     res.status(500).json({ message: "Failed to create notification" });
+//   }
+// });
 
 // routes/notifications.js
-import express from "express";
-import { redis } from "../lib/redis.js";
-
-const router = express.Router();
-const NOTIF_LIST_KEY = "notifications";
-
-// ---- Fetch persisted notifications ----
-router.get("/", async (req, res) => {
+router.post("/", async (req, res) => {
   try {
-    const notifications = (await redis.lrange(NOTIF_LIST_KEY, 0, -1)).map(
-      (n) => JSON.parse(n)
-    );
+    const notification = new Notification(req.body);
+    await notification.save();
+    res.status(201).json(notification);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to create notification" });
+  }
+});
+
+router.get("/users/:userId/notifications", async (req, res) => {
+  try {
+    const notifications = await Notification.find({ userId: req.params.userId }).sort({ createdAt: -1 });
     res.json(notifications);
   } catch (err) {
-    console.error("Redis fetch notifications error:", err);
-    res.status(500).json({ error: "Failed to fetch notifications" });
+    res.status(500).json({ message: "Failed to get notifications" });
   }
 });
 
-// ---- Mark notification as read ----
-router.patch("/:id/read", async (req, res) => {
+router.patch("/users/:userId/notifications/:notifId", async (req, res) => {
   try {
-    const notifications = (await redis.lrange(NOTIF_LIST_KEY, 0, -1)).map(
-      (n) => JSON.parse(n)
+    const updated = await Notification.findOneAndUpdate(
+      { _id: req.params.notifId, userId: req.params.userId },
+      { read: true },
+      { new: true }
     );
-
-    const updated = notifications.map((n) =>
-      n.id === req.params.id ? { ...n, read: true } : n
-    );
-
-    await redis.del(NOTIF_LIST_KEY);
-    if (updated.length > 0) {
-      await redis.lpush(
-        NOTIF_LIST_KEY,
-        ...updated.map((n) => JSON.stringify(n))
-      );
-    }
-
-    res.json({ success: true });
+    res.json(updated);
   } catch (err) {
-    console.error("Redis mark read error:", err);
-    res.status(500).json({ error: "Failed to mark as read" });
+    res.status(500).json({ message: "Failed to mark as read" });
   }
 });
 
-// ---- Clear notifications ----
-router.delete("/clear", async (req, res) => {
+router.delete("/users/:userId/notifications", async (req, res) => {
   try {
-    await redis.del(NOTIF_LIST_KEY);
-    res.json({ success: true });
+    await Notification.deleteMany({ userId: req.params.userId });
+    res.json({ message: "All notifications cleared" });
   } catch (err) {
-    console.error("Redis clear notifications error:", err);
-    res.status(500).json({ error: "Failed to clear notifications" });
+    res.status(500).json({ message: "Failed to clear notifications" });
   }
 });
 
-export default router;
+// ✅ Get all notifications (for admin dashboard)
+router.get("/", async (req, res) => {
+  try {
+    const notifications = await Notification.find().sort({ createdAt: -1 });
+    res.json(notifications);
+  } catch (err) {
+    console.error("Error fetching notifications:", err);
+    res.status(500).json({ message: "Failed to fetch notifications" });
+  }
+});
+
+
+
+// router.get("/users/:userId/notifications", async (req, res) => {
+//   try {
+//     console.log("Fetching notifications for:", req.params.userId);
+//     const notifications = await Notification.find({ userId: req.params.userId }).sort({ createdAt: -1 });
+//     console.log("Found:", notifications.length);
+//     res.json(notifications);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Failed to get notifications" });
+//   }
+// });
+
+
+module.exports = router;
