@@ -124,29 +124,22 @@
 // module.exports = router;
 
 
-const express = require("express");
+// order.js (Express backend)
+import express from "express";
+import multer from "multer";
+import cloudinary from "../config/cloudinary.js";
+import Order from "../models/Order.js";
+import { redis } from "../lib/redis.js"; // ✅ Upstash Redis client
+
 const router = express.Router();
-const Order = require("../models/Order");
-const cloudinary = require("../config/cloudinary");
-const multer = require("multer");
-const { Redis } = require("@upstash/redis");
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Multer setup (store file in memory before upload to Cloudinary)
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
-
-// Upstash Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
-
-// Create a new order (with file upload)
+// ---------------- CREATE ORDER ----------------
 router.post("/", upload.array("images"), async (req, res) => {
   try {
     let uploadedItems = [];
 
-    // Upload each image to Cloudinary if provided
+    // Upload images to Cloudinary
     if (req.files && req.files.length > 0) {
       uploadedItems = await Promise.all(
         req.files.map(
@@ -165,10 +158,9 @@ router.post("/", upload.array("images"), async (req, res) => {
       );
     }
 
-    // Build order items (map body data with uploaded image URLs)
     const items = JSON.parse(req.body.items).map((item, idx) => ({
       ...item,
-      image: uploadedItems[idx] || item.image, // fallback if no new image
+      image: uploadedItems[idx] || item.image,
     }));
 
     const newOrder = new Order({
@@ -180,19 +172,22 @@ router.post("/", upload.array("images"), async (req, res) => {
       ),
       address: JSON.parse(req.body.address),
       notes: req.body.notes || "",
+      status: "pending",
     });
 
     await newOrder.save();
 
-    // 🔔 Publish realtime notification
-    await redis.publish(
-      "admin-notifications",
-      JSON.stringify({
-        type: "new_order",
-        role: "admin",
-        message: `New order placed by user ${req.body.userId}`,
-      })
-    );
+    // ---- Push + Publish Notification ----
+    const notif = {
+      id: Date.now().toString(),
+      userId: req.body.userId,
+      message: `New order placed with ${items.length} items.`,
+      createdAt: new Date().toISOString(),
+    };
+
+    await redis.lpush("notifications", JSON.stringify(notif));
+    await redis.ltrim("notifications", 0, 49); // keep only latest 50
+    await redis.publish("notifications_channel", JSON.stringify(notif));
 
     res.status(201).json(newOrder);
   } catch (error) {
@@ -201,7 +196,7 @@ router.post("/", upload.array("images"), async (req, res) => {
   }
 });
 
-// Get all orders (admin)
+// ---------------- GET ALL ORDERS ----------------
 router.get("/", async (req, res) => {
   try {
     const orders = await Order.find()
@@ -214,7 +209,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Get orders for a specific user
+// ---------------- GET USER ORDERS ----------------
 router.get("/user/:userId", async (req, res) => {
   try {
     const orders = await Order.find({ userId: req.params.userId }).sort({
@@ -227,7 +222,7 @@ router.get("/user/:userId", async (req, res) => {
   }
 });
 
-// Get order by ID
+// ---------------- GET ORDER BY ID ----------------
 router.get("/:id", async (req, res) => {
   try {
     const order = await Order.findById(req.params.id).populate(
@@ -242,7 +237,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Update order status
+// ---------------- UPDATE ORDER STATUS ----------------
 router.put("/:id/status", async (req, res) => {
   const { status } = req.body;
   try {
@@ -253,15 +248,15 @@ router.put("/:id/status", async (req, res) => {
     );
     if (!updatedOrder) return res.status(404).json({ error: "Order not found" });
 
-    // 🔔 Publish realtime notification
-    await redis.publish(
-      "admin-notifications",
-      JSON.stringify({
-        type: "status_update",
-        role: "admin",
-        message: `Order ${updatedOrder._id} status updated to ${status}`,
-      })
-    );
+    // 🔔 Notification
+    const notif = {
+      id: Date.now().toString(),
+      message: `Order ${updatedOrder._id} status updated to ${status}`,
+      createdAt: new Date().toISOString(),
+    };
+    await redis.lpush("notifications", JSON.stringify(notif));
+    await redis.ltrim("notifications", 0, 49);
+    await redis.publish("notifications_channel", JSON.stringify(notif));
 
     res.json(updatedOrder);
   } catch (error) {
@@ -270,7 +265,7 @@ router.put("/:id/status", async (req, res) => {
   }
 });
 
-// Request order cancellation
+// ---------------- REQUEST CANCELLATION ----------------
 router.patch("/:id/cancel", async (req, res) => {
   try {
     const updatedOrder = await Order.findByIdAndUpdate(
@@ -280,15 +275,15 @@ router.patch("/:id/cancel", async (req, res) => {
     );
     if (!updatedOrder) return res.status(404).json({ error: "Order not found" });
 
-    // 🔔 Publish realtime notification
-    await redis.publish(
-      "admin-notifications",
-      JSON.stringify({
-        type: "cancel_request",
-        role: "admin",
-        message: `Order ${updatedOrder._id} requested cancellation`,
-      })
-    );
+    // 🔔 Notification
+    const notif = {
+      id: Date.now().toString(),
+      message: `Order ${updatedOrder._id} requested cancellation`,
+      createdAt: new Date().toISOString(),
+    };
+    await redis.lpush("notifications", JSON.stringify(notif));
+    await redis.ltrim("notifications", 0, 49);
+    await redis.publish("notifications_channel", JSON.stringify(notif));
 
     res.json(updatedOrder);
   } catch (error) {
@@ -297,21 +292,20 @@ router.patch("/:id/cancel", async (req, res) => {
   }
 });
 
-// SSE endpoint for real-time notifications
+// ---------------- STREAM NOTIFICATIONS (SSE) ----------------
 router.get("/stream/notifications", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
 
-  // subscribe to redis
-  const unsubscribe = await redis.subscribe("admin-notifications", (msg) => {
-    res.write(`data: ${msg}\n\n`);
+  const listener = redis.subscribe("notifications_channel", (message) => {
+    res.write(`data: ${message}\n\n`);
   });
 
-  // cleanup when connection closes
   req.on("close", () => {
-    unsubscribe();
+    listener.unsubscribe();
+    res.end();
   });
 });
 
-module.exports = router;
+export default router;
