@@ -125,21 +125,24 @@
 
 
 // order.js (Express backend)
+// routes/order.js
 import express from "express";
 import multer from "multer";
 import cloudinary from "../config/cloudinary.js";
 import Order from "../models/Order.js";
-import { redis } from "../lib/redis.js"; // ✅ Upstash Redis client
+import { redis } from "../lib/redis.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Redis key
+const NOTIF_LIST_KEY = "notifications";
 
 // ---------------- CREATE ORDER ----------------
 router.post("/", upload.array("images"), async (req, res) => {
   try {
     let uploadedItems = [];
 
-    // Upload images to Cloudinary
     if (req.files && req.files.length > 0) {
       uploadedItems = await Promise.all(
         req.files.map(
@@ -177,16 +180,17 @@ router.post("/", upload.array("images"), async (req, res) => {
 
     await newOrder.save();
 
-    // ---- Push + Publish Notification ----
+    // 🔔 Notification
     const notif = {
       id: Date.now().toString(),
-      userId: req.body.userId,
+      type: "new_order",
       message: `New order placed with ${items.length} items.`,
       createdAt: new Date().toISOString(),
+      read: false,
     };
 
-    await redis.lpush("notifications", JSON.stringify(notif));
-    await redis.ltrim("notifications", 0, 49); // keep only latest 50
+    await redis.lpush(NOTIF_LIST_KEY, JSON.stringify(notif));
+    await redis.ltrim(NOTIF_LIST_KEY, 0, 49); // keep only last 50
     await redis.publish("notifications_channel", JSON.stringify(notif));
 
     res.status(201).json(newOrder);
@@ -251,11 +255,13 @@ router.put("/:id/status", async (req, res) => {
     // 🔔 Notification
     const notif = {
       id: Date.now().toString(),
+      type: "status_update",
       message: `Order ${updatedOrder._id} status updated to ${status}`,
       createdAt: new Date().toISOString(),
+      read: false,
     };
-    await redis.lpush("notifications", JSON.stringify(notif));
-    await redis.ltrim("notifications", 0, 49);
+    await redis.lpush(NOTIF_LIST_KEY, JSON.stringify(notif));
+    await redis.ltrim(NOTIF_LIST_KEY, 0, 49);
     await redis.publish("notifications_channel", JSON.stringify(notif));
 
     res.json(updatedOrder);
@@ -278,17 +284,69 @@ router.patch("/:id/cancel", async (req, res) => {
     // 🔔 Notification
     const notif = {
       id: Date.now().toString(),
+      type: "cancel_request",
       message: `Order ${updatedOrder._id} requested cancellation`,
       createdAt: new Date().toISOString(),
+      read: false,
     };
-    await redis.lpush("notifications", JSON.stringify(notif));
-    await redis.ltrim("notifications", 0, 49);
+    await redis.lpush(NOTIF_LIST_KEY, JSON.stringify(notif));
+    await redis.ltrim(NOTIF_LIST_KEY, 0, 49);
     await redis.publish("notifications_channel", JSON.stringify(notif));
 
     res.json(updatedOrder);
   } catch (error) {
     console.error("Cancel order request error:", error);
     res.status(500).json({ error: "Failed to request cancellation" });
+  }
+});
+
+// ---------------- FETCH NOTIFICATIONS ----------------
+router.get("/notifications", async (req, res) => {
+  try {
+    const notifications = (await redis.lrange(NOTIF_LIST_KEY, 0, -1)).map(
+      (n) => JSON.parse(n)
+    );
+    res.json(notifications);
+  } catch (err) {
+    console.error("Redis fetch notifications error:", err);
+    res.status(500).json({ error: "Failed to fetch notifications" });
+  }
+});
+
+// ---------------- MARK NOTIFICATION AS READ ----------------
+router.patch("/notifications/:id/read", async (req, res) => {
+  try {
+    const notifications = (await redis.lrange(NOTIF_LIST_KEY, 0, -1)).map(
+      (n) => JSON.parse(n)
+    );
+
+    const updated = notifications.map((n) =>
+      n.id === req.params.id ? { ...n, read: true } : n
+    );
+
+    await redis.del(NOTIF_LIST_KEY);
+    if (updated.length > 0) {
+      await redis.lpush(
+        NOTIF_LIST_KEY,
+        ...updated.map((n) => JSON.stringify(n))
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Redis mark read error:", err);
+    res.status(500).json({ error: "Failed to mark as read" });
+  }
+});
+
+// ---------------- CLEAR NOTIFICATIONS ----------------
+router.delete("/notifications/clear", async (req, res) => {
+  try {
+    await redis.del(NOTIF_LIST_KEY);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Redis clear notifications error:", err);
+    res.status(500).json({ error: "Failed to clear notifications" });
   }
 });
 
@@ -309,3 +367,4 @@ router.get("/stream/notifications", async (req, res) => {
 });
 
 export default router;
+

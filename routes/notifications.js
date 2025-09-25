@@ -56,19 +56,14 @@
 
 // module.exports = router;
 
-const express = require("express");
-const { Redis } = require("@upstash/redis");
+// routes/notifications.js
+import express from "express";
+import { redis } from "../lib/redis.js";
+
 const router = express.Router();
+const NOTIF_LIST_KEY = "notifications";
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
-
-// Keys
-const NOTIF_LIST_KEY = "admin:notifications";
-
-// Fetch all notifications
+// ---- Fetch persisted notifications ----
 router.get("/", async (req, res) => {
   try {
     const notifications = (await redis.lrange(NOTIF_LIST_KEY, 0, -1)).map(
@@ -81,7 +76,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Mark as read
+// ---- Mark notification as read ----
 router.patch("/:id/read", async (req, res) => {
   try {
     const notifications = (await redis.lrange(NOTIF_LIST_KEY, 0, -1)).map(
@@ -107,7 +102,7 @@ router.patch("/:id/read", async (req, res) => {
   }
 });
 
-// Clear notifications
+// ---- Clear notifications ----
 router.delete("/clear", async (req, res) => {
   try {
     await redis.del(NOTIF_LIST_KEY);
@@ -118,4 +113,4 @@ router.delete("/clear", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
