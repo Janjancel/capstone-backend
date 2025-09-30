@@ -1,8 +1,15 @@
+
 // const express = require("express");
 // const router = express.Router();
 // const Demolition = require("../models/Demolition");
+// const multer = require("multer");
+// const cloudinary = require("../config/cloudinary");
+// const streamifier = require("streamifier");
 
-// // GET /api/demolish - Fetch all demolition requests
+// // Multer setup (memory storage)
+// const upload = multer({ storage: multer.memoryStorage() });
+
+// // ================= GET /api/demolish =================
 // router.get("/", async (req, res) => {
 //   try {
 //     const requests = await Demolition.find().sort({ createdAt: -1 });
@@ -13,25 +20,64 @@
 //   }
 // });
 
-// // POST /api/demolish - Create new demolition request
-// router.post("/", async (req, res) => {
+// // ================= POST /api/demolish =================
+// router.post("/", upload.single("image"), async (req, res) => {
 //   try {
-//     console.log("📦 Incoming payload:", JSON.stringify(req.body, null, 2));
+//     console.log("📦 Incoming body:", req.body);
+//     console.log("📷 Incoming file:", req.file);
 
-//     const { userId, name, contact, price, description, image, location } = req.body;
+//     // Safe destructuring
+//     const body = req.body || {};
+//     const userId = body.userId;
+//     const name = body.name;
+//     const contact = body.contact;
+//     const price = body.price;
+//     const description = body.description;
+//     const location = body.location;
 
-//     if (!userId || !name || !contact || !price || !description || !location?.lat || !location?.lng) {
+//     // Validate required fields
+//     if (!userId || !name || !contact || !price || !description || !location) {
 //       return res.status(400).json({ error: "Missing required fields" });
 //     }
 
+//     // Parse location if it's a string
+//     let parsedLocation;
+//     try {
+//       parsedLocation = typeof location === "string" ? JSON.parse(location) : location;
+//       if (parsedLocation.lat === undefined || parsedLocation.lng === undefined) {
+//         return res.status(400).json({ error: "Invalid location object" });
+//       }
+//     } catch (err) {
+//       return res.status(400).json({ error: "Location must be valid JSON" });
+//     }
+
+//     // Upload image to Cloudinary if provided
+//     let imageUrl = null;
+//     if (req.file && req.file.buffer) {
+//       const streamUpload = (fileBuffer) =>
+//         new Promise((resolve, reject) => {
+//           const stream = cloudinary.uploader.upload_stream(
+//             { folder: "demolitions" },
+//             (error, result) => {
+//               if (result) resolve(result.secure_url);
+//               else reject(error);
+//             }
+//           );
+//           streamifier.createReadStream(fileBuffer).pipe(stream);
+//         });
+
+//       imageUrl = await streamUpload(req.file.buffer);
+//     }
+
+//     // Save new demolition request to MongoDB
 //     const newRequest = new Demolition({
 //       userId,
 //       name,
 //       contact,
-//       price,
+//       price: Number(price),
 //       description,
-//       image,
-//       location,
+//       image: imageUrl,
+//       location: parsedLocation,
 //       status: "pending",
 //       createdAt: new Date(),
 //     });
@@ -44,7 +90,7 @@
 //   }
 // });
 
-// // PATCH /api/demolish/:id - Update status
+// // ================= PATCH /api/demolish/:id =================
 // router.patch("/:id", async (req, res) => {
 //   try {
 //     const updated = await Demolition.findByIdAndUpdate(
@@ -59,7 +105,7 @@
 //   }
 // });
 
-// // DELETE /api/demolish/:id - Delete request
+// // ================= DELETE /api/demolish/:id =================
 // router.delete("/:id", async (req, res) => {
 //   try {
 //     await Demolition.findByIdAndDelete(req.params.id);
@@ -80,10 +126,9 @@ const multer = require("multer");
 const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
 
-// Multer setup (memory storage)
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ================= GET /api/demolish =================
+// GET all requests
 router.get("/", async (req, res) => {
   try {
     const requests = await Demolition.find().sort({ createdAt: -1 });
@@ -94,30 +139,20 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ================= POST /api/demolish =================
+// POST a request
 router.post("/", upload.single("image"), async (req, res) => {
   try {
-    console.log("📦 Incoming body:", req.body);
-    console.log("📷 Incoming file:", req.file);
-
-    // Safe destructuring
     const body = req.body || {};
-    const userId = body.userId;
-    const name = body.name;
-    const contact = body.contact;
-    const price = body.price;
-    const description = body.description;
-    const location = body.location;
+    const { userId, name, contact, price, description, location } = body;
 
-    // Validate required fields
     if (!userId || !name || !contact || !price || !description || !location) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Parse location if it's a string
     let parsedLocation;
     try {
-      parsedLocation = typeof location === "string" ? JSON.parse(location) : location;
+      parsedLocation =
+        typeof location === "string" ? JSON.parse(location) : location;
       if (parsedLocation.lat === undefined || parsedLocation.lng === undefined) {
         return res.status(400).json({ error: "Invalid location object" });
       }
@@ -125,7 +160,6 @@ router.post("/", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "Location must be valid JSON" });
     }
 
-    // Upload image to Cloudinary if provided
     let imageUrl = null;
     if (req.file && req.file.buffer) {
       const streamUpload = (fileBuffer) =>
@@ -143,7 +177,6 @@ router.post("/", upload.single("image"), async (req, res) => {
       imageUrl = await streamUpload(req.file.buffer);
     }
 
-    // Save new demolition request to MongoDB
     const newRequest = new Demolition({
       userId,
       name,
@@ -153,7 +186,6 @@ router.post("/", upload.single("image"), async (req, res) => {
       image: imageUrl,
       location: parsedLocation,
       status: "pending",
-      createdAt: new Date(),
     });
 
     const saved = await newRequest.save();
@@ -164,22 +196,77 @@ router.post("/", upload.single("image"), async (req, res) => {
   }
 });
 
-// ================= PATCH /api/demolish/:id =================
+// PATCH request
 router.patch("/:id", async (req, res) => {
   try {
+    const updateData = {};
+    if (req.body.status) updateData.status = req.body.status;
+    if (req.body.scheduledDate) {
+      updateData.scheduledDate = new Date(req.body.scheduledDate);
+    }
+
     const updated = await Demolition.findByIdAndUpdate(
       req.params.id,
-      { status: req.body.status },
+      updateData,
       { new: true }
     );
+
+    if (!updated) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    // Notification
+    try {
+      const msg =
+        req.body.scheduledDate && req.body.status === "ocular_scheduled"
+          ? `Your ocular visit has been scheduled on ${new Date(
+              req.body.scheduledDate
+            ).toLocaleDateString()}`
+          : req.body.scheduledDate
+          ? `Your demolish request has been scheduled on ${new Date(
+              req.body.scheduledDate
+            ).toLocaleDateString()}`
+          : req.body.status
+          ? `Your demolish request has been ${req.body.status}`
+          : "Your demolish request was updated";
+
+      try {
+        const Notification = require("../models/Notification");
+        await Notification.create({
+          userId: updated.userId,
+          title: "Demolition Request Update",
+          message: msg,
+          data: { demolitionId: updated._id },
+          read: false,
+          createdAt: new Date(),
+        });
+      } catch (e) {}
+
+      try {
+        const io = req.app && req.app.get && req.app.get("io");
+        if (io) {
+          io.to(updated.userId).emit("notification", {
+            title: "Demolition Request Update",
+            message: msg,
+            data: { demolitionId: updated._id },
+            createdAt: new Date(),
+          });
+        }
+      } catch (e) {}
+
+      console.log(`📢 Notification to user ${updated.userId}: ${msg}`);
+    } catch (notifErr) {
+      console.error("❌ Notification creation/emit failed:", notifErr);
+    }
+
     res.json(updated);
   } catch (err) {
-    console.error("❌ Error updating status:", err);
-    res.status(500).json({ error: "Failed to update status" });
+    console.error("❌ Error updating request:", err);
+    res.status(500).json({ error: "Failed to update request" });
   }
 });
 
-// ================= DELETE /api/demolish/:id =================
+// DELETE request
 router.delete("/:id", async (req, res) => {
   try {
     await Demolition.findByIdAndDelete(req.params.id);
