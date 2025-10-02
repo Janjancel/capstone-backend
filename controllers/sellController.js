@@ -83,17 +83,19 @@ const cloudinary = require("../config/cloudinary");
 const streamifier = require("streamifier");
 const Notification = require("../models/Notification"); // For creating notifications
 
-// Create a new sell request
+// --- Create a new sell request ---
 exports.createSell = async (req, res) => {
   const { userId, name, contact, price, description, location } = req.body;
   let image = null;
 
   if (!userId || !name || !contact || !price || !description || !location) {
-    return res.status(400).json({ success: false, message: "Missing required fields" });
+    return res
+      .status(400)
+      .json({ success: false, message: "Missing required fields" });
   }
 
   try {
-    // Cloudinary upload if file exists
+    // Upload image to Cloudinary if exists
     if (req.file && req.file.buffer) {
       const streamUpload = (fileBuffer) =>
         new Promise((resolve, reject) => {
@@ -103,6 +105,7 @@ exports.createSell = async (req, res) => {
           );
           streamifier.createReadStream(fileBuffer).pipe(stream);
         });
+
       image = await streamUpload(req.file.buffer);
     }
 
@@ -124,11 +127,13 @@ exports.createSell = async (req, res) => {
     res.status(201).json({ success: true, sellRequest: saved });
   } catch (err) {
     console.error("❌ Error creating sell request:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: err.message });
   }
 };
 
-// Get all sell requests
+// --- Get all sell requests ---
 exports.getSellRequests = async (req, res) => {
   try {
     const requests = await SellRequest.find().sort({ createdAt: -1 });
@@ -139,19 +144,22 @@ exports.getSellRequests = async (req, res) => {
   }
 };
 
-// Update status (Accept/Decline)
+// --- Update status (Accept / Decline) ---
 exports.updateStatus = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid ID" });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid ID" });
+    }
 
     const request = await SellRequest.findById(id);
-    if (!request) return res.status(404).json({ message: "Sell request not found" });
+    if (!request) {
+      return res.status(404).json({ message: "Sell request not found" });
+    }
 
     if (status) request.status = status;
-
     await request.save();
 
     res.json({ success: true, sellRequest: request });
@@ -161,7 +169,7 @@ exports.updateStatus = async (req, res) => {
   }
 };
 
-// Schedule ocular visit
+// --- Schedule ocular visit ---
 exports.scheduleOcularVisit = async (req, res) => {
   const { id } = req.params;
   const { date } = req.body;
@@ -169,18 +177,25 @@ exports.scheduleOcularVisit = async (req, res) => {
   if (!date) return res.status(400).json({ message: "Date is required" });
 
   try {
-    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid ID" });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid ID" });
+    }
 
     const request = await SellRequest.findById(id);
-    if (!request) return res.status(404).json({ message: "Sell request not found" });
+    if (!request) {
+      return res.status(404).json({ message: "Sell request not found" });
+    }
 
     request.status = "ocular_scheduled";
     request.scheduledDate = new Date(date);
     await request.save();
 
-    // Create notification
+    // --- Create notification for client ---
     try {
-      const msg = `Your ocular visit has been scheduled on ${new Date(date).toLocaleDateString()}`;
+      const msg = `Your ocular visit has been scheduled on ${new Date(
+        date
+      ).toLocaleDateString()}`;
+
       await Notification.create({
         userId: request.userId,
         title: "Sell Request Update",
@@ -204,24 +219,32 @@ exports.scheduleOcularVisit = async (req, res) => {
       console.error("❌ Notification error:", notifErr);
     }
 
-    res.json(request);
+    res.json({ success: true, sellRequest: request });
   } catch (err) {
     console.error("❌ Error scheduling ocular visit:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-// Delete sell request
+// --- Delete sell request ---
 exports.deleteSell = async (req, res) => {
   const { id } = req.params;
 
-  if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid ID" });
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: "Invalid ID" });
+  }
 
   try {
     const deleted = await SellRequest.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ message: "Sell request not found" });
+    if (!deleted) {
+      return res.status(404).json({ message: "Sell request not found" });
+    }
 
-    res.json({ success: true, message: "Request deleted successfully", deletedId: deleted._id });
+    res.json({
+      success: true,
+      message: "Request deleted successfully",
+      deletedId: deleted._id,
+    });
   } catch (err) {
     console.error("❌ Error deleting request:", err);
     res.status(500).json({ message: "Server error", error: err.message });
