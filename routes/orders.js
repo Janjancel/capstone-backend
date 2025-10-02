@@ -195,6 +195,7 @@ router.put("/:id/status", async (req, res) => {
   try {
     const updatedOrder = await Order.findByIdAndUpdate(
       req.params.id,
+
       { status },
       { new: true }
     );
@@ -223,7 +224,6 @@ router.patch("/:id/cancel", async (req, res) => {
 });
 
 module.exports = router;
-
 
 // const express = require("express");
 // const router = express.Router();

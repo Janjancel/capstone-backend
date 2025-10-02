@@ -35,12 +35,13 @@ const {
   getSellRequests,
   updateStatus,
   deleteSell,
+  scheduleOcularVisit
 } = require("../controllers/sellController");
 
 // Multer config for file upload
 const storage = multer.diskStorage({
   filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
+    cb(null, Date.now() + path.extname(file.originalname)); 
   },
 });
 const upload = multer({ storage });
@@ -56,6 +57,9 @@ router.put("/:id/status", updateStatus);
 
 // Delete sell request
 router.delete("/:id", deleteSell);
+
+// NEW: schedule ocular visit
+router.patch("/:id/schedule-ocular", scheduleOcularVisit);
 
 module.exports = router;
 
