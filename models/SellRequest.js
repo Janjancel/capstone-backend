@@ -28,8 +28,8 @@ const SellRequestSchema = new mongoose.Schema({
   description: String,
   image: String,
   location: {
-    lat: Number,
-    lng: Number,
+    lat: { type: Number },
+    lng: { type: Number },
   },
   status: {
     type: String,

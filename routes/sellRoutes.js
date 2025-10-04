@@ -72,14 +72,10 @@ const path = require("path");
 const mongoose = require("mongoose");
 const SellRequest = require("../models/SellRequest");
 const cloudinary = require("../config/cloudinary");
+const streamifier = require("streamifier");
 
 // ================= Multer Config =================
-const storage = multer.diskStorage({
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
-const upload = multer({ storage });
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ================= Route Handlers =================
 
@@ -94,29 +90,57 @@ router.post("/", upload.single("image"), async (req, res) => {
       .json({ success: false, message: "Missing required fields" });
   }
 
+  // Parse and validate location
+  let parsedLocation;
   try {
-    if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: "sell_images",
-      });
-      image = result.secure_url;
+    parsedLocation = typeof location === "string" ? JSON.parse(location) : location;
+    if (
+      typeof parsedLocation.lat !== "number" ||
+      typeof parsedLocation.lng !== "number"
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid location object" });
+    }
+  } catch (err) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Location must be valid JSON" });
+  }
+
+  try {
+    if (req.file && req.file.buffer) {
+      // Upload image to Cloudinary
+      const streamUpload = (fileBuffer) =>
+        new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "sell_images" },
+            (error, result) => {
+              if (result) resolve(result.secure_url);
+              else reject(error);
+            }
+          );
+          streamifier.createReadStream(fileBuffer).pipe(stream);
+        });
+
+      image = await streamUpload(req.file.buffer);
     }
 
     const newSell = await SellRequest.create({
       userId,
       name,
       contact,
-      price,
+      price: Number(price),
       description,
       image: image || null,
-      location,
+      location: parsedLocation,
       status: "pending",
       createdAt: new Date(),
     });
 
     res.status(201).json({ success: true, sellRequest: newSell });
   } catch (err) {
-    console.error("Error creating sell request:", err);
+    console.error("💥 Server error creating sell request:", err);
     res
       .status(500)
       .json({ success: false, message: "Server error", error: err.message });
@@ -182,7 +206,6 @@ router.patch("/:id/status", async (req, res) => {
 });
 
 // ================= Delete Route =================
-
 router.delete("/:id", async (req, res) => {
   console.log("🔥 deleteSell route hit with id:", req.params.id);
 
@@ -220,4 +243,3 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
-
