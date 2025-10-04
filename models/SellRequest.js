@@ -1,3 +1,5 @@
+
+
 // const mongoose = require("mongoose");
 
 // const SellRequestSchema = new mongoose.Schema({
@@ -6,13 +8,17 @@
 //   contact: String,
 //   price: Number,
 //   description: String,
-//   image: String, // base64
+//   image: String,
 //   location: {
-//     lat: Number,
-//     lng: Number,
+//     lat: { type: Number },
+//     lng: { type: Number },
 //   },
-//   // status: { type: String, default: "pending" },
-//   status: { type: String, enum: ["pending", "accepted", "declined"], default: "pending" },
+//   status: {
+//     type: String,
+//     enum: ["pending", "accepted", "declined", "ocular_scheduled"],
+//     default: "pending",
+//   },
+//   ocularVisit: { type: Date, default: null },
 //   createdAt: { type: Date, default: Date.now },
 // });
 
@@ -26,7 +32,11 @@ const SellRequestSchema = new mongoose.Schema({
   contact: String,
   price: Number,
   description: String,
-  image: String,
+  images: {
+    front: { type: String, default: null },
+    side: { type: String, default: null },
+    back: { type: String, default: null },
+  },
   location: {
     lat: { type: Number },
     lng: { type: Number },
