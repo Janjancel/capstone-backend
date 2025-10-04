@@ -134,28 +134,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Update status (Accept / Decline)
-router.put("/:id/status", async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
+// ================= Specific PATCH Routes =================
 
-  try {
-    const request = await SellRequest.findById(id);
-    if (!request)
-      return res.status(404).json({ message: "Sell request not found" });
-
-    request.status = status;
-    await request.save();
-
-    res.json({ status: request.status });
-  } catch (err) {
-    console.error("💥 Error updating sell status:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
-// Schedule Ocular Visit
-router.put("/:id/schedule-ocular", async (req, res) => {
+// Schedule Ocular Visit → PATCH
+router.patch("/:id/schedule-ocular", async (req, res) => {
   const { id } = req.params;
   const { ocularVisit } = req.body;
 
@@ -179,7 +161,28 @@ router.put("/:id/schedule-ocular", async (req, res) => {
   }
 });
 
-// Delete sell request
+// Update status (Accept / Decline) → PATCH
+router.patch("/:id/status", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    const request = await SellRequest.findById(id);
+    if (!request)
+      return res.status(404).json({ message: "Sell request not found" });
+
+    request.status = status;
+    await request.save();
+
+    res.json({ success: true, status: request.status });
+  } catch (err) {
+    console.error("💥 Error updating sell status:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// ================= Delete Route =================
+
 router.delete("/:id", async (req, res) => {
   console.log("🔥 deleteSell route hit with id:", req.params.id);
 
@@ -217,3 +220,4 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
