@@ -25,7 +25,11 @@ const DemolitionSchema = new mongoose.Schema({
   contact: { type: String, required: true },
   price: { type: Number, required: true },
   description: { type: String, required: true },
-  image: { type: String },
+  images: {
+    front: { type: String, default: null },
+    side: { type: String, default: null },
+    back: { type: String, default: null },
+  },
   location: {
     lat: { type: Number },
     lng: { type: Number },

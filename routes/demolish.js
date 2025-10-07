@@ -10,6 +10,19 @@ const streamifier = require("streamifier");
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Helper for Cloudinary upload
+const streamUpload = (fileBuffer, folder = "demolitions") =>
+  new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder },
+      (error, result) => {
+        if (result) resolve(result.secure_url);
+        else reject(error);
+      }
+    );
+    streamifier.createReadStream(fileBuffer).pipe(stream);
+  });
+
 // GET all requests
 router.get("/", async (req, res) => {
   try {
@@ -22,7 +35,11 @@ router.get("/", async (req, res) => {
 });
 
 // POST a request
-router.post("/", upload.single("image"), async (req, res) => {
+router.post("/", upload.fields([
+  { name: "frontImage", maxCount: 1 },
+  { name: "sideImage", maxCount: 1 },
+  { name: "backImage", maxCount: 1 },
+]), async (req, res) => {
   try {
     const body = req.body || {};
     const { userId, name, contact, price, description, location } = body;
@@ -42,21 +59,23 @@ router.post("/", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "Location must be valid JSON" });
     }
 
-    let imageUrl = null;
-    if (req.file && req.file.buffer) {
-      const streamUpload = (fileBuffer) =>
-        new Promise((resolve, reject) => {
-          const stream = cloudinary.uploader.upload_stream(
-            { folder: "demolitions" },
-            (error, result) => {
-              if (result) resolve(result.secure_url);
-              else reject(error);
-            }
-          );
-          streamifier.createReadStream(fileBuffer).pipe(stream);
-        });
+    // Handle multiple image uploads
+    let uploadedImages = {
+      front: null,
+      side: null,
+      back: null,
+    };
 
-      imageUrl = await streamUpload(req.file.buffer);
+    if (req.files) {
+      if (req.files.frontImage) {
+        uploadedImages.front = await streamUpload(req.files.frontImage[0].buffer);
+      }
+      if (req.files.sideImage) {
+        uploadedImages.side = await streamUpload(req.files.sideImage[0].buffer);
+      }
+      if (req.files.backImage) {
+        uploadedImages.back = await streamUpload(req.files.backImage[0].buffer);
+      }
     }
 
     const newRequest = new Demolition({
@@ -65,7 +84,7 @@ router.post("/", upload.single("image"), async (req, res) => {
       contact,
       price: Number(price),
       description,
-      image: imageUrl,
+      images: uploadedImages,
       location: parsedLocation,
       status: "pending",
     });
