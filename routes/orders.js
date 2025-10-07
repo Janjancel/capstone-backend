@@ -17,27 +17,37 @@ router.post("/", upload.array("images"), async (req, res) => {
     // Upload each image to Cloudinary if provided
     if (req.files && req.files.length > 0) {
       uploadedItems = await Promise.all(
-        req.files.map(async (file) => {
-          const result = await cloudinary.uploader.upload_stream(
-            { folder: "orders" },
-            (error, result) => {
-              if (error) throw error;
-              return result.secure_url;
-            }
-          );
+        req.files.map((file) => {
+          return new Promise((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+              { folder: "orders" },
+              (error, result) => {
+                if (error) {
+                  reject(error);
+                  return;
+                }
+                resolve(result.secure_url);
+              }
+            );
 
-          return result;
+            // Convert buffer to stream and pipe to cloudinary
+            const bufferStream = require('stream').Readable.from(file.buffer);
+            bufferStream.pipe(uploadStream);
+          });
         })
       );
     }
 
-    // Build order items (map body data with uploaded image URLs)
+    // Parse and build order items with their images
     const parsedItems = JSON.parse(req.body.items);
-    const items = parsedItems.map((item, idx) => ({
-      ...item,
-      image: item.image || (item.images && item.images.length > 0 ? item.images[0] : null), // Ensure single image URL
-      itemId: item._id // Preserve the original item ID
-    }));
+    const items = parsedItems.map((item, idx) => {
+      // If there's a new uploaded image for this item, use it
+      // Otherwise keep the existing image URL from the item
+      return {
+        ...item,
+        image: uploadedItems[idx] || item.image,
+      };
+    });
 
     const newOrder = new Order({
       userId: req.body.userId,
@@ -81,25 +91,9 @@ router.get("/user/:userId", async (req, res) => {
 // Get order by ID
 router.get("/:id", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
-      .populate("userId", "email")
-      .populate({
-        path: "items.itemId",
-        model: "Item",
-        select: "image images name"
-      });
+    const order = await Order.findById(req.params.id).populate("userId", "email");
     if (!order) return res.status(404).json({ error: "Order not found" });
-    
-    // Merge populated item data with order items
-    const processedOrder = {
-      ...order.toObject(),
-      items: order.items.map(item => ({
-        ...item,
-        image: item.image || item.itemId?.image || (item.itemId?.images && item.itemId.images.length > 0 ? item.itemId.images[0] : null)
-      }))
-    };
-    
-    res.json(processedOrder);
+    res.json(order);
   } catch (error) {
     console.error("Fetch order by ID error:", error);
     res.status(500).json({ error: "Failed to fetch order" });

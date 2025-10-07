@@ -22,8 +22,7 @@ const orderSchema = new mongoose.Schema({
       name: String,
       quantity: Number,
       price: Number,
-      image: String, // single Cloudinary URL for the item
-      itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item' }, // reference to original item
+      image: String, // store Cloudinary URL here
     },
   ],
   total: Number,
