@@ -23,6 +23,7 @@
     "mongodb": "^6.16.0",
     "mongoose": "^8.15.0",
     "multer": "^2.0.2",
+    "node-geocoder": "^4.4.1",
     "nodemailer": "^7.0.3",
     "pg": "^8.16.0",
     "streamifier": "^0.1.1",

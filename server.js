@@ -4,10 +4,11 @@
 // const cors = require('cors');
 // require('dotenv').config();
 
-// const heritageRoutes = require('./routes/heritageRoutes');
-// const authRoutes = require('./routes/authRoutes');
-// const userRoutes = require('./routes/userRoutes');
-// const db = require('./config/db'); // PostgreSQL connection
+const heritageRoutes = require('./routes/heritageRoutes');
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const geocodeRoutes = require('./routes/geocodeRoutes');
+const db = require('./config/db'); // PostgreSQL connection
 
 // const app = express();
 // const PORT = process.env.PORT || 5000;
@@ -31,9 +32,10 @@
 //   .catch(err => console.error('❌ PostgreSQL connection error:', err));
 
 // // ✅ Routes
-// app.use('/api/heritage', heritageRoutes);
-// app.use('/api/auth', authRoutes);
-// app.use('/api/users', userRoutes);
+app.use('/api/heritage', heritageRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/geocode', geocodeRoutes);
 
 // // ✅ Test route to confirm CORS is working
 // app.get('/api/test', (req, res) => {
