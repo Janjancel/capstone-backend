@@ -1,7 +1,8 @@
+// models/Counter.js
 const mongoose = require("mongoose");
 
 const counterSchema = new mongoose.Schema({
-  name: { type: String, required: true, unique: true },
+  _id: { type: String, required: true },   // sequence name, e.g., "user_uid"
   seq: { type: Number, default: 0 },
 });
 

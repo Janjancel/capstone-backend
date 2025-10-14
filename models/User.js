@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
+const Counter = require("./Counter");
 
 // Embedded address schema
 const addressSchema = new mongoose.Schema({
@@ -13,6 +14,11 @@ const addressSchema = new mongoose.Schema({
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
+  userId: {
+    type: String,
+    unique: true,
+    required: true,
+  },
   username: {
     type: String,
     required: true,
@@ -59,6 +65,21 @@ const userSchema = new mongoose.Schema({
     type: String,
   },
 }, { timestamps: true });
+
+// Generate userId middleware
+userSchema.pre("save", async function (next) {
+  if (!this.userId) {
+    const counter = await Counter.findByIdAndUpdate(
+      "user_uid",
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    
+    // Generate 6-digit ID with leading zeros
+    this.userId = counter.seq.toString().padStart(6, "0");
+  }
+  next();
+});
 
 // Password hashing middleware
 userSchema.pre("save", async function (next) {
