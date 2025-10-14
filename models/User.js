@@ -68,17 +68,30 @@ const userSchema = new mongoose.Schema({
 
 // Generate userId middleware
 userSchema.pre("save", async function (next) {
-  if (!this.userId) {
-    const counter = await Counter.findByIdAndUpdate(
-      "user_uid",
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
-    
-    // Generate 6-digit ID with leading zeros
-    this.userId = counter.seq.toString().padStart(6, "0");
+  try {
+    if (!this.userId) {
+      let counter;
+      try {
+        counter = await Counter.findByIdAndUpdate(
+          "user_uid",
+          { $inc: { seq: 1 } },
+          { new: true, upsert: true }
+        );
+      } catch (counterError) {
+        console.error("Error with counter:", counterError);
+        // If counter doesn't exist, create it
+        counter = await new Counter({ _id: "user_uid", seq: 1 }).save();
+      }
+      
+      // Generate 6-digit ID with leading zeros
+      this.userId = counter.seq.toString().padStart(6, "0");
+      console.log("Generated new userId:", this.userId);
+    }
+    next();
+  } catch (error) {
+    console.error("Error in userId generation middleware:", error);
+    next(error);
   }
-  next();
 });
 
 // Password hashing middleware
