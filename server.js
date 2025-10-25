@@ -72,17 +72,10 @@ const uploadRoutes = require("./routes/upload");
 const featuredItemRoutes = require("./routes/featuredItems");
 
 
-// const profilePictureRoutes = require("./routes/ProfilePicture");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-
-// CORS setup
-// app.use(cors({
-//   origin: "http://localhost:3000", // or your frontend domain
-//   credentials: true,
-// }));
 
 // ✅ Connect to MongoDB
 connectDB();
@@ -111,29 +104,9 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Increase payload limit to 50MB (adjust as needed)
-// app.use(express.json({ limit: "50mb" }));
-// app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-
-// ✅ Middleware setup
-// const corsOptions = {
-//   origin: [
-//   'http://localhost:3000', // for local dev
-//   'https://capstone-one-phi.vercel.app' // for Vercel frontend
-// ],
-// // origin: 'https://capstone-one-phi.vercel.app', // ✅ exact string, not array
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization'],
-// };
-
-// app.use(cors(corsOptions));
-// app.options('*', cors(corsOptions)); // Handles preflight requests
 app.use(express.json());
-// app.use('/uploads', express.static('uploads')); // Serve uploaded static files
-// Serve files in the uploads folder as static files
-// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 
 // ✅ Routes
 app.use('/api/heritage', heritageRoutes);
@@ -152,37 +125,10 @@ app.use("/api/demolish", demolishRoutes);
 app.use("/api/featured-items", featuredItemRoutes); 
 
 app.use('/api/auth/google-register', googleRegisterRoutes);
-// app.use("/api/upload", uploadRoutes)
-// app.use("/api", uploadRoutes);
 
-// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-// ✅ Health Check Route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'CORS and MongoDB working' });
 });
-
-// Serve uploaded files from the 'uploads' folder
-// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// const storage = multer.diskStorage({
-//   destination: function (req, file, cb) {
-//     cb(null, "uploads/"); // folder to save images
-//   },
-//   filename: function (req, file, cb) {
-//     cb(null, Date.now() + "-" + file.originalname); // unique filename
-//   },
-// });
-
-// const upload = multer({ storage,
-//     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max per file
-//  });
-
-// app.post("/api/upload", upload.single("image"), (req, res) => {
-//   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-  
-//   // Send back the URL of the uploaded file
-//   res.json({ imageUrl: `/uploads/${req.file.filename}` });
-// });
 
 // ✅ Start server
 app.listen(PORT, '0.0.0.0', () => {
