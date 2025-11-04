@@ -193,8 +193,8 @@
 
 // module.exports = router;
 
-// // routes/orders.js
-// const express = require("express");
+
+//   const express = require("express");
 // const router = express.Router();
 // const Order = require("../models/Order");
 // const cloudinary = require("../config/cloudinary");
@@ -250,12 +250,6 @@
 // // Create a new order (with file upload)
 // router.post("/", upload.array("images"), async (req, res) => {
 //   try {
-//     // --- 0) Validate userId presence early
-//     const userId = req.body.userId;
-//     if (!userId) {
-//       return res.status(400).json({ error: "Missing userId" });
-//     }
-
 //     // 1) Upload any incoming files to Cloudinary
 //     let uploadedItems = [];
 //     if (req.files && req.files.length > 0) {
@@ -280,47 +274,28 @@
 //     const rawItems =
 //       Array.isArray(req.body.items) ? req.body.items : JSON.parse(req.body.items || "[]");
 
-//     if (!Array.isArray(rawItems) || rawItems.length === 0) {
-//       return res.status(400).json({ error: "Order must include at least one item." });
-//     }
-
 //     // If we have exactly one uploaded image per item, map by index. Otherwise fallback to item’s own URL.
 //     const useIndexMapping =
 //       uploadedItems.length > 0 && uploadedItems.length === rawItems.length;
 
-//     // 3) Normalize order items so schema-required fields are present
+//     // 3) Normalize order items so image is ALWAYS a clean string URL
 //     const items = rawItems.map((item, idx) => {
-//       const id =
-//         (item && (item.id || item.itemId || item._id)) ? String(item.id || item.itemId || item._id) : null;
-
-//       if (!id) {
-//         throw new Error("Each item must include an id.");
-//       }
-
-//       const qty = Number(item.quantity) || 0;
-//       const price = Number(item.price) || 0;
-//       const subtotal = +(qty * price).toFixed(2);
-
 //       const uploadedUrl = useIndexMapping ? uploadedItems[idx] : undefined;
 //       const normalizedUrl = uploadedUrl || pickImageUrlFromItem(item);
 
-//       // images[] optional; include primary if we have it
-//       const images = [];
-//       if (normalizedUrl) images.push(normalizedUrl);
-
 //       return {
-//         id,
-//         name: item.name || "Untitled Item",
-//         quantity: qty,
-//         price,
-//         subtotal,
-//         image: typeof normalizedUrl === "string" ? normalizedUrl : undefined,
-//         images, // optional array
+//         name: item.name,
+//         quantity: Number(item.quantity) || 0,
+//         price: Number(item.price) || 0,
+//         image: typeof normalizedUrl === "string" ? normalizedUrl : undefined, // store only a string URL
 //       };
 //     });
 
-//     // 4) Compute total safely (server-source-of-truth)
-//     const total = items.reduce((sum, i) => sum + (Number(i.subtotal) || 0), 0);
+//     // 4) Compute total safely
+//     const total = items.reduce(
+//       (sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 0),
+//       0
+//     );
 
 //     // 5) Parse address field
 //     const address =
@@ -328,30 +303,19 @@
 //         ? JSON.parse(req.body.address || "{}")
 //         : req.body.address || {};
 
-//     const notes = typeof req.body.notes === "string" ? req.body.notes : "";
-
 //     const newOrder = new Order({
-//       userId,
+//       userId: req.body.userId,
 //       items,
 //       total,
 //       address,
-//       notes,
+//       notes: req.body.notes || "",
 //     });
 
 //     await newOrder.save();
-//     return res.status(201).json(newOrder);
+//     res.status(201).json(newOrder);
 //   } catch (error) {
 //     console.error("Order creation error:", error);
-
-//     // Send better messages for common cases
-//     if (error.name === "ValidationError") {
-//       return res.status(400).json({ error: "Validation failed", details: error.message });
-//     }
-//     if (error.name === "SyntaxError") {
-//       return res.status(400).json({ error: "Bad JSON in payload", details: error.message });
-//     }
-
-//     return res.status(500).json({ error: "Failed to create order" });
+//     res.status(500).json({ error: "Failed to create order" });
 //   }
 // });
 
@@ -424,7 +388,7 @@
 
 // module.exports = router;
 
-
+// routes/orders.js
 const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
@@ -481,6 +445,12 @@ function pickImageUrlFromItem(item) {
 // Create a new order (with file upload)
 router.post("/", upload.array("images"), async (req, res) => {
   try {
+    // --- 0) Validate userId presence early
+    const userId = req.body.userId;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+
     // 1) Upload any incoming files to Cloudinary
     let uploadedItems = [];
     if (req.files && req.files.length > 0) {
@@ -505,28 +475,47 @@ router.post("/", upload.array("images"), async (req, res) => {
     const rawItems =
       Array.isArray(req.body.items) ? req.body.items : JSON.parse(req.body.items || "[]");
 
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      return res.status(400).json({ error: "Order must include at least one item." });
+    }
+
     // If we have exactly one uploaded image per item, map by index. Otherwise fallback to item’s own URL.
     const useIndexMapping =
       uploadedItems.length > 0 && uploadedItems.length === rawItems.length;
 
-    // 3) Normalize order items so image is ALWAYS a clean string URL
+    // 3) Normalize order items so schema-required fields are present
     const items = rawItems.map((item, idx) => {
+      const id =
+        (item && (item.id || item.itemId || item._id)) ? String(item.id || item.itemId || item._id) : null;
+
+      if (!id) {
+        throw new Error("Each item must include an id.");
+      }
+
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.price) || 0;
+      const subtotal = +(qty * price).toFixed(2);
+
       const uploadedUrl = useIndexMapping ? uploadedItems[idx] : undefined;
       const normalizedUrl = uploadedUrl || pickImageUrlFromItem(item);
 
+      // images[] optional; include primary if we have it
+      const images = [];
+      if (normalizedUrl) images.push(normalizedUrl);
+
       return {
-        name: item.name,
-        quantity: Number(item.quantity) || 0,
-        price: Number(item.price) || 0,
-        image: typeof normalizedUrl === "string" ? normalizedUrl : undefined, // store only a string URL
+        id,
+        name: item.name || "Untitled Item",
+        quantity: qty,
+        price,
+        subtotal,
+        image: typeof normalizedUrl === "string" ? normalizedUrl : undefined,
+        images, // optional array
       };
     });
 
-    // 4) Compute total safely
-    const total = items.reduce(
-      (sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 0),
-      0
-    );
+    // 4) Compute total safely (server-source-of-truth)
+    const total = items.reduce((sum, i) => sum + (Number(i.subtotal) || 0), 0);
 
     // 5) Parse address field
     const address =
@@ -534,19 +523,30 @@ router.post("/", upload.array("images"), async (req, res) => {
         ? JSON.parse(req.body.address || "{}")
         : req.body.address || {};
 
+    const notes = typeof req.body.notes === "string" ? req.body.notes : "";
+
     const newOrder = new Order({
-      userId: req.body.userId,
+      userId,
       items,
       total,
       address,
-      notes: req.body.notes || "",
+      notes,
     });
 
     await newOrder.save();
-    res.status(201).json(newOrder);
+    return res.status(201).json(newOrder);
   } catch (error) {
     console.error("Order creation error:", error);
-    res.status(500).json({ error: "Failed to create order" });
+
+    // Send better messages for common cases
+    if (error.name === "ValidationError") {
+      return res.status(400).json({ error: "Validation failed", details: error.message });
+    }
+    if (error.name === "SyntaxError") {
+      return res.status(400).json({ error: "Bad JSON in payload", details: error.message });
+    }
+
+    return res.status(500).json({ error: "Failed to create order" });
   }
 });
 
