@@ -69,8 +69,7 @@ const sellRoutes = require("./routes/sellRoutes");
 const demolishRoutes = require("./routes/demolish");
 const googleRegisterRoutes = require('./routes/authRoutes/googleRegister');
 const uploadRoutes = require("./routes/upload");
-
-const productRatingRoute = require("./routes/productRatingRoute");
+const featuredItemRoutes = require("./routes/featuredItems");
 
 
 
@@ -125,7 +124,6 @@ app.use("/api/sell", sellRoutes);
 app.use("/api/demolish", demolishRoutes);
 
 app.use("/api/featured-items", featuredItemRoutes);
-app.use("/api/product-ratings", productRatingRoute);
 
 app.use('/api/auth/google-register', googleRegisterRoutes);
 
