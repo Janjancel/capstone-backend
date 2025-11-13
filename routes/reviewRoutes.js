@@ -1,45 +1,88 @@
-const express = require('express');
+// backend/routes/reviews.js
+const express = require("express");
 const router = express.Router();
-const Review = require('../models/Review');
-const { authMiddleware } = require('../middleware/authMiddleware');
+const Review = require("../models/Review");
 
-// Create a review (for Unika Antika, not orders)
-router.post('/', authMiddleware, async (req, res) => {
+// Create a review
+router.post("/", async (req, res) => {
   try {
-    const { rating, feedback } = req.body;
-    const userId = req.user && req.user._id;
-
-    if (typeof rating !== 'number' || rating < 0 || rating > 5) {
-      return res.status(400).json({ error: 'Rating is required and must be a number between 0 and 5.' });
+    // Minimal validation: rating required and must be between 1 and 5
+    const { rating } = req.body;
+    if (rating === undefined || rating === null) {
+      return res.status(400).json({ message: "Rating is required" });
     }
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized.' });
+    const r = Number(rating);
+    if (!Number.isFinite(r) || r < 1 || r > 5) {
+      return res.status(400).json({ message: "Rating must be a number between 1 and 5" });
     }
 
-    const review = new Review({
-      userId,
-      rating,
-      feedback,
-    });
-
+    const review = new Review(req.body);
     await review.save();
-    return res.status(201).json({ message: 'Review saved', review });
+    res.status(201).json(review);
   } catch (err) {
-    console.error('Error saving review:', err);
-    return res.status(500).json({ error: 'Failed to save review.' });
+    console.error("Failed to create review:", err);
+    res.status(500).json({ message: "Failed to create review" });
   }
 });
 
-// Get all reviews (public)
-router.get('/', async (req, res) => {
+// Get all reviews for a specific user (most recent first)
+router.get("/users/:userId/reviews", async (req, res) => {
   try {
-    const reviews = await Review.find().sort({ createdAt: -1 }).populate('userId', 'name email');
+    const reviews = await Review.find({ userId: req.params.userId }).sort({ createdAt: -1 });
     res.json(reviews);
   } catch (err) {
-    console.error('Failed to fetch reviews:', err);
-    res.status(500).json({ error: 'Failed to fetch reviews.' });
+    console.error("Failed to get user reviews:", err);
+    res.status(500).json({ message: "Failed to get reviews" });
+  }
+});
+
+// Update a review (partial update) for a specific user
+router.patch("/users/:userId/reviews/:reviewId", async (req, res) => {
+  try {
+    const updated = await Review.findOneAndUpdate(
+      { _id: req.params.reviewId, userId: req.params.userId },
+      { $set: req.body },
+      { new: true, runValidators: true }
+    );
+    res.json(updated);
+  } catch (err) {
+    console.error("Failed to update review:", err);
+    res.status(500).json({ message: "Failed to update review" });
+  }
+});
+
+// Delete all reviews for a user
+router.delete("/users/:userId/reviews", async (req, res) => {
+  try {
+    await Review.deleteMany({ userId: req.params.userId });
+    res.json({ message: "All reviews cleared for user" });
+  } catch (err) {
+    console.error("Failed to clear user reviews:", err);
+    res.status(500).json({ message: "Failed to clear reviews" });
+  }
+});
+
+// Get a single review by id
+router.get("/:id", async (req, res) => {
+  try {
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    res.json(review);
+  } catch (err) {
+    console.error("Failed to get review:", err);
+    res.status(500).json({ message: "Failed to get review" });
+  }
+});
+
+// ✅ Get all reviews (for admin dashboard)
+router.get("/", async (req, res) => {
+  try {
+    const reviews = await Review.find().sort({ createdAt: -1 });
+    res.json(reviews);
+  } catch (err) {
+    console.error("Error fetching reviews:", err);
+    res.status(500).json({ message: "Failed to fetch reviews" });
   }
 });
 
 module.exports = router;
-
