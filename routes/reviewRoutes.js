@@ -3,7 +3,7 @@ const router = express.Router();
 const Review = require('../models/Review');
 const { authMiddleware } = require('../middleware/authMiddleware');
 
-// Create a review (requires authentication)
+// Create a review (for Unika Antika, not orders)
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { rating, feedback } = req.body;
@@ -37,17 +37,6 @@ router.get('/', async (req, res) => {
     res.json(reviews);
   } catch (err) {
     console.error('Failed to fetch reviews:', err);
-    res.status(500).json({ error: 'Failed to fetch reviews.' });
-  }
-});
-
-// Optionally: get reviews by user
-router.get('/user/:userId', async (req, res) => {
-  try {
-    const reviews = await Review.find({ userId: req.params.userId }).sort({ createdAt: -1 });
-    res.json(reviews);
-  } catch (err) {
-    console.error('Failed to fetch reviews by user:', err);
     res.status(500).json({ error: 'Failed to fetch reviews.' });
   }
 });
