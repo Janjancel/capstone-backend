@@ -85,7 +85,9 @@ connectDB();
 const allowedOrigins = [
   "http://localhost:3000",               // local dev
   "https://capstone-one-phi.vercel.app", // production frontend
-  "https://unika-antika.vercel.app"
+  "https://unika-antika.vercel.app",
+
+  "https://capstone-44frjxxhp-janjancels-projects.vercel.app"
 ];
 
 const corsOptions = {
