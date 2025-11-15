@@ -2,6 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const Cart = require("../models/Cart");
+const reserveForCart = require("../lib/reserveForCart"); // <--- new
 
 // Get cart for user
 router.get("/:userId", async (req, res) => {
@@ -10,26 +11,73 @@ router.get("/:userId", async (req, res) => {
   res.json(cart || { cartItems: [] });
 });
 
+
 // Add or update item in cart
 router.post("/:userId/add", async (req, res) => {
   const userId = req.params.userId;
   const { itemId } = req.body;
+  if (!itemId) return res.status(400).json({ error: "itemId required" });
 
   let cart = await Cart.findOne({ userId });
   if (!cart) {
     cart = new Cart({ userId, cartItems: [] });
   }
 
-  const index = cart.cartItems.findIndex((i) => i.id === itemId);
+  // Try find cartItem (comparing ObjectId strings - normalize if needed)
+  const index = cart.cartItems.findIndex((i) => String(i.id) === String(itemId));
   if (index !== -1) {
     cart.cartItems[index].quantity += 1;
   } else {
-    cart.cartItems.push({ id: itemId, quantity: 1 });
+    // include an availability snapshot placeholder (null || true/false)
+    cart.cartItems.push({ id: itemId, quantity: 1, availability: null });
   }
 
   await cart.save();
-  res.sendStatus(200);
+
+  // Attempt to reserve immediately and update cart snapshot
+  const result = await reserveForCart(userId, itemId);
+
+  // Optionally, fetch updated cartItem to return the latest snapshot
+  const updatedCart = await Cart.findOne({ userId }).lean();
+  const updatedCartItem = updatedCart.cartItems.find(ci => String(ci.id) === String(itemId));
+
+  if (!result.success) {
+    // reservation failed unexpectedly — but we still saved cart
+    return res.status(500).json({
+      message: "Added to cart but failed to reserve item",
+      reserveError: String(result.error),
+      cartItem: updatedCartItem,
+    });
+  }
+
+  return res.status(200).json({
+    message: "Added to cart",
+    reserved: !!result.reserved,
+    availability: result.availability,
+    cartItem: updatedCartItem,
+  });
 });
+
+// // Add or update item in cart
+// router.post("/:userId/add", async (req, res) => {
+//   const userId = req.params.userId;
+//   const { itemId } = req.body;
+
+//   let cart = await Cart.findOne({ userId });
+//   if (!cart) {
+//     cart = new Cart({ userId, cartItems: [] });
+//   }
+
+//   const index = cart.cartItems.findIndex((i) => i.id === itemId);
+//   if (index !== -1) {
+//     cart.cartItems[index].quantity += 1;
+//   } else {
+//     cart.cartItems.push({ id: itemId, quantity: 1 });
+//   }
+
+//   await cart.save();
+//   res.sendStatus(200);
+// });
 
 // Update quantity of an item
 router.put("/:userId/update", async (req, res) => {

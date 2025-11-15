@@ -8,6 +8,20 @@
 // });
 // const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
+// // One source of truth for allowed categories
+// const CATEGORIES = [
+//   "Table",
+//   "Chair",
+//   "Flooring",
+//   "Cabinet",
+//   "Post",
+//   "Scraps",
+//   "Stones",
+//   "Windows",
+//   "Bed",
+//   "Uncategorized", // keep as default option
+// ];
+
 // const ItemSchema = new mongoose.Schema({
 //   // Custom formatted ID: MM-I-####-YY (e.g., 10-I-0001-25)
 //   itemId: {
@@ -22,7 +36,7 @@
 //   description: String,
 //   price: { type: Number, required: true },
 
-//   // ✅ New: item condition rating (1 to 10)
+//   // 1–10 condition rating
 //   condition: {
 //     type: Number,
 //     required: true,
@@ -33,24 +47,26 @@
 //   origin: String,
 //   age: String,
 //   images: [String], // array of URLs
-//   category: {
-//     type: String,
-//     enum: [
-//       "Table",
-//       "Chair",
-//       "Flooring",
-//       "Cabinet",
-//       "Post",
-//       "Scraps",
-//       "Stones",
-//       "Windows",
-//       "Bed",
-//       "Uncategorized", // include this since it's the default
-//     ],
-//     default: "Uncategorized",
-//     required: true,
+
+//   // ✅ NEW: allow multiple categories
+//   categories: {
+//     type: [{ type: String, enum: CATEGORIES }],
+//     default: ["Uncategorized"],
+//     validate: {
+//       validator: (arr) => Array.isArray(arr) && arr.length > 0,
+//       message: "At least one category is required",
+//     },
+//     index: true,
 //   },
-//   createdAt: { type: Date, default: Date.now },
+
+//   createdAt: { type: Date, default: Date.now, index: true },
+// });
+
+// // Backward-friendly virtual: .category -> first categories entry
+// ItemSchema.virtual("category").get(function () {
+//   return Array.isArray(this.categories) && this.categories.length
+//     ? this.categories[0]
+//     : "Uncategorized";
 // });
 
 // // Auto-generate itemId as MM-I-####-YY using a monthly counter
@@ -77,7 +93,9 @@
 //   }
 // });
 
-// module.exports = mongoose.models.Item || mongoose.model("Item", ItemSchema);
+// const Item = mongoose.models.Item || mongoose.model("Item", ItemSchema);
+// module.exports = Item;
+// module.exports.CATEGORIES = CATEGORIES;
 
 
 const mongoose = require("mongoose");
@@ -137,6 +155,13 @@ const ItemSchema = new mongoose.Schema({
       validator: (arr) => Array.isArray(arr) && arr.length > 0,
       message: "At least one category is required",
     },
+    index: true,
+  },
+
+  // ✅ NEW: availability flag (default true)
+  availability: {
+    type: Boolean,
+    default: true,
     index: true,
   },
 
