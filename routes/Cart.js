@@ -107,6 +107,10 @@ router.get('/:userId', async (req, res) => {
 
 module.exports = router;
 
+
+//===================================
+//BELOW IS THE ROUTE FOR ADD TO CART > ITEM AVAILABILITY="FALSE"
+
 // const express = require("express");
 // const mongoose = require("mongoose");
 // const router = express.Router();
