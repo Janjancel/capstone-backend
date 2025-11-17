@@ -1,5 +1,16 @@
+
+
+
+// // models/User.js
 // const mongoose = require("mongoose");
 // const bcrypt = require("bcrypt");
+
+// // --- Counter model (for monthly sequences) ---
+// const counterSchema = new mongoose.Schema({
+//   key: { type: String, unique: true, index: true }, // e.g., 'user:10-25'
+//   seq: { type: Number, default: 0 },
+// });
+// const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
 // // Embedded address schema
 // const addressSchema = new mongoose.Schema({
@@ -13,6 +24,15 @@
 // }, { _id: false });
 
 // const userSchema = new mongoose.Schema({
+//   // Custom formatted ID: MM-####-YY
+//   userId: {
+//     type: String,
+//     unique: true,
+//     required: true,
+//     trim: true,
+//     match: [/^\d{2}-\d{4}-\d{2}$/, "Invalid ID format (MM-####-YY)"],
+//   },
+
 //   username: {
 //     type: String,
 //     required: true,
@@ -51,7 +71,7 @@
 //   },
 //   address: addressSchema,
 
-//     isVerified: {
+//   isVerified: {
 //     type: Boolean,
 //     default: false,
 //   },
@@ -59,6 +79,36 @@
 //     type: String,
 //   },
 // }, { timestamps: true });
+
+// /**
+//  * Auto-generate userId as MM-####-YY
+//  * - MM = current month (01-12)
+//  * - #### = zero-padded monthly sequence
+//  * - YY = last two digits of year
+//  */
+// userSchema.pre("validate", async function (next) {
+//   try {
+//     if (this.userId) return next(); // respect pre-set IDs (must still match regex)
+
+//     const now = new Date();
+//     const mm = String(now.getMonth() + 1).padStart(2, "0");
+//     const yy = String(now.getFullYear() % 100).padStart(2, "0");
+
+//     // One counter per month-year
+//     const key = `user:${mm}-${yy}`;
+//     const doc = await Counter.findOneAndUpdate(
+//       { key },
+//       { $inc: { seq: 1 } },
+//       { new: true, upsert: true, setDefaultsOnInsert: true }
+//     );
+
+//     const seqStr = String(doc.seq).padStart(4, "0");
+//     this.userId = `${mm}-${seqStr}-${yy}`;
+//     return next();
+//   } catch (err) {
+//     return next(err);
+//   }
+// });
 
 // // Password hashing middleware
 // userSchema.pre("save", async function (next) {
@@ -76,14 +126,13 @@
 //   return this.findByIdAndUpdate(
 //     userId,
 //     { status, lastLogin: new Date() },
-//     { new: true } // return the updated document
+//     { new: true }
 //   );
 // };
 
-// module.exports = mongoose.model("User", userSchema);
+// module.exports = mongoose.models.User || mongoose.model("User", userSchema);
 
 
-// models/User.js
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 
@@ -94,7 +143,7 @@ const counterSchema = new mongoose.Schema({
 });
 const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
-// Embedded address schema
+// Embedded address schema (NO coordinates here — coordinates are now separate on the user root)
 const addressSchema = new mongoose.Schema({
   region: { type: String },
   province: { type: String },
@@ -103,6 +152,26 @@ const addressSchema = new mongoose.Schema({
   street: { type: String },
   houseNo: { type: String },
   zipCode: { type: String }
+}, { _id: false });
+
+// Reusable coordinates schema constant — lat/lng are integers per your validator
+const coordinatesSchema = new mongoose.Schema({
+  lat: {
+    type: Number,
+    default: null,
+    validate: {
+      validator: Number.isInteger,
+      message: "Latitude (lat) must be an integer",
+    },
+  },
+  lng: {
+    type: Number,
+    default: null,
+    validate: {
+      validator: Number.isInteger,
+      message: "Longitude (lng) must be an integer",
+    },
+  },
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
@@ -151,7 +220,12 @@ const userSchema = new mongoose.Schema({
   profilePic: {
     type: String, // base64 or URL
   },
+
+  // Address (embedded, no coordinates here)
   address: addressSchema,
+
+  // Coordinates grouped under `coordinates` on the user root
+  coordinates: coordinatesSchema,
 
   isVerified: {
     type: Boolean,
