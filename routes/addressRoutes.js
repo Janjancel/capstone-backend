@@ -120,10 +120,10 @@ router.get("/:userId", async (req, res) => {
  * Accepts:
  *  {
  *    userId: "<mongoId>",
- *    coordinates: { lat: 123, lng: 456 }
+ *    coordinates: { lat: 123.456, lng: 456.789 }
  *  }
  *
- * Note: your schema validates lat/lng as integers. This route enforces integer input.
+ * This handler accepts floats or numeric strings and stores them as Numbers (floats) on user.coordinates.
  */
 
 // Extract the coordinates-save logic to a handler so we can reuse it on two routes
@@ -140,23 +140,24 @@ async function saveCoordinatesHandler(req, res) {
 
   const { lat, lng } = coordinates;
 
-  // Ensure lat and lng are integers (explicit)
-  // If they're strings that represent integers, try to coerce but still validate
-  const latInt = Number(lat);
-  const lngInt = Number(lng);
+  // Accept numeric floats or numeric strings that represent finite numbers.
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
 
-  if (!Number.isInteger(latInt) || !Number.isInteger(lngInt)) {
-    return res.status(400).json({ message: "lat and lng must be integer values" });
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+    return res
+      .status(400)
+      .json({ message: "lat and lng must be valid numeric values (finite numbers)" });
   }
 
   try {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Save under user.coordinates as your schema expects
+    // Save under user.coordinates as your schema expects — store the floats exactly.
     user.coordinates = {
-      lat: latInt,
-      lng: lngInt,
+      lat: latNum,
+      lng: lngNum,
     };
 
     await user.save();

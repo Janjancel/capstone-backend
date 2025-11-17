@@ -159,18 +159,12 @@ const coordinatesSchema = new mongoose.Schema({
   lat: {
     type: Number,
     default: null,
-    validate: {
-      validator: Number.isInteger,
-      message: "Latitude (lat) must be an integer",
-    },
+
   },
   lng: {
     type: Number,
     default: null,
-    validate: {
-      validator: Number.isInteger,
-      message: "Longitude (lng) must be an integer",
-    },
+
   },
 }, { _id: false });
 
