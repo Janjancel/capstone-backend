@@ -195,4 +195,21 @@ router.get("/coordinates/:userId", async (req, res) => {
   }
 });
 
+// GET /coordinates/byUserId/:customUserId
+router.get("/coordinates/byUserId/:customUserId", async (req, res) => {
+  const { customUserId } = req.params;
+  if (!customUserId) return res.status(400).json({ message: "Missing userId" });
+
+  try {
+    // find by your custom userId field (not Mongo _id)
+    const user = await User.findOne({ userId: customUserId }, "coordinates");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user.coordinates || { lat: null, lng: null });
+  } catch (err) {
+    console.error("Fetch coordinates by userId error:", err);
+    res.status(500).json({ message: "Failed to fetch coordinates" });
+  }
+});
+
+
 module.exports = router;
