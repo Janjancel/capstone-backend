@@ -325,25 +325,67 @@ router.patch("/:id/schedule-ocular", async (req, res) => {
   }
 });
 
+// // Update status (Accept / Decline) → PATCH
+// router.patch("/:id/status", async (req, res) => {
+//   const { id } = req.params;
+//   const { status } = req.body;
+
+//   try {
+//     const request = await SellRequest.findById(id);
+//     if (!request)
+//       return res.status(404).json({ message: "Sell request not found" });
+
+//     request.status = status;
+//     await request.save();
+
+//     res.json({ success: true, status: request.status });
+//   } catch (err) {
+//     console.error("💥 Error updating sell status:", err);
+//     res.status(500).json({ message: "Server error", error: err.message });
+//   }
+// });
+
 // Update status (Accept / Decline) → PATCH
 router.patch("/:id/status", async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, declineReason } = req.body;
 
   try {
     const request = await SellRequest.findById(id);
-    if (!request)
+    if (!request) {
       return res.status(404).json({ message: "Sell request not found" });
+    }
+
+    // If trying to decline, require a non-empty declineReason
+    if (status === "declined") {
+      if (
+        typeof declineReason !== "string" ||
+        declineReason.trim().length === 0
+      ) {
+        return res
+          .status(400)
+          .json({ message: "declineReason is required when declining." });
+      }
+      request.declineReason = declineReason.trim();
+    } else {
+      // Clear declineReason when status is not declined
+      request.declineReason = null;
+    }
 
     request.status = status;
     await request.save();
 
-    res.json({ success: true, status: request.status });
+    res.json({
+      success: true,
+      status: request.status,
+      declineReason: request.declineReason,
+    });
   } catch (err) {
     console.error("💥 Error updating sell status:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
+
 
 // Delete Route
 router.delete("/:id", async (req, res) => {
