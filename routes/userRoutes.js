@@ -189,7 +189,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Cart = require('../models/Cart');
-const Admin = require('../models/Admin'); // kept because original router referenced it
+// const Admin = require('../models/Admin'); // kept because original router referenced it
 const bcrypt = require('bcrypt');
 const authMiddleware = require('../middleware/authMiddleware');
 
