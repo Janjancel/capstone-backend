@@ -1,5 +1,4 @@
 
-
 // const mongoose = require("mongoose");
 
 // // Shared counter model (atomic monthly sequences)
@@ -22,7 +21,30 @@
 //   userId: { type: String, required: true },
 //   name: { type: String, required: true },
 //   contact: { type: String, required: true },
-//   price: { type: Number, required: true },
+
+//   // Final accepted price; can be null until client accepts a proposed price
+//   price: {
+//     type: Number,
+//     default: null,
+//     set: (v) => (v === "" || v === undefined || v === "null" ? null : v),
+//     validate: {
+//       validator: (v) =>
+//         v === null || v === undefined || (typeof v === "number" && !Number.isNaN(v) && v >= 0),
+//       message: "Price must be a non-negative number or null.",
+//     },
+//   },
+
+//   // Admin's wish price awaiting client's approval
+//   proposedPrice: {
+//     type: Number,
+//     default: null,
+//     validate: {
+//       validator: (v) =>
+//         v === null || v === undefined || (typeof v === "number" && !Number.isNaN(v) && v > 0),
+//       message: "Proposed price must be a positive number or null.",
+//     },
+//   },
+
 //   description: { type: String, required: true },
 //   images: {
 //     front: { type: String, default: null },
@@ -62,7 +84,9 @@
 //   }
 // });
 
-// module.exports = mongoose.models.Demolition || mongoose.model("Demolition", DemolitionSchema);
+// module.exports =
+//   mongoose.models.Demolition || mongoose.model("Demolition", DemolitionSchema);
+
 
 const mongoose = require("mongoose");
 
@@ -74,7 +98,7 @@ const counterSchema = new mongoose.Schema({
 const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
 const DemolitionSchema = new mongoose.Schema({
-  // Custom formatted ID: MM-D-####-YY (e.g., 10-D-0001-25)
+  // Custom formatted ID: MM-D-####-YY
   demolishId: {
     type: String,
     unique: true,
@@ -87,45 +111,78 @@ const DemolitionSchema = new mongoose.Schema({
   name: { type: String, required: true },
   contact: { type: String, required: true },
 
-  // Final accepted price; can be null until client accepts a proposed price
   price: {
     type: Number,
     default: null,
-    set: (v) => (v === "" || v === undefined || v === "null" ? null : v),
+    set: (v) =>
+      v === "" || v === undefined || v === "null" ? null : v,
     validate: {
       validator: (v) =>
-        v === null || v === undefined || (typeof v === "number" && !Number.isNaN(v) && v >= 0),
+        v === null || (typeof v === "number" && !Number.isNaN(v) && v >= 0),
       message: "Price must be a non-negative number or null.",
     },
   },
 
-  // Admin's wish price awaiting client's approval
   proposedPrice: {
     type: Number,
     default: null,
     validate: {
       validator: (v) =>
-        v === null || v === undefined || (typeof v === "number" && !Number.isNaN(v) && v > 0),
-      message: "Proposed price must be a positive number or null.",
+        v === null || (typeof v === "number" && !Number.isNaN(v) && v > 0),
+      message: "Proposed price must be positive or null.",
     },
   },
 
   description: { type: String, required: true },
+
   images: {
     front: { type: String, default: null },
     side: { type: String, default: null },
     back: { type: String, default: null },
   },
+
   location: {
     lat: { type: Number },
     lng: { type: Number },
   },
-  status: { type: String, default: "pending" },
+
+  status: {
+    type: String,
+    enum: [
+      "pending",
+      "awaiting_price_approval",
+      "price_accepted",
+      "price_declined",
+      "ocular_scheduled",
+      "scheduled",
+      "declined",
+      "completed",
+    ],
+    default: "pending",
+  },
+
   scheduledDate: { type: Date },
+
+  // NEW FIELD: Decline reason
+  declineReason: {
+    type: String,
+    trim: true,
+    default: null,
+    validate: {
+      validator: function (v) {
+        if (this.status === "declined") {
+          return typeof v === "string" && v.trim().length > 0;
+        }
+        return true;
+      },
+      message: "declineReason is required when status is 'declined'.",
+    },
+  },
+
   createdAt: { type: Date, default: Date.now },
 });
 
-// Auto-generate demolishId (MM-D-####-YY) using a monthly counter
+// Auto-generate demolishId (MM-D-####-YY)
 DemolitionSchema.pre("validate", async function (next) {
   try {
     if (this.demolishId) return next();
@@ -141,12 +198,21 @@ DemolitionSchema.pre("validate", async function (next) {
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
-    const seqStr = String(doc.seq).padStart(4, "0");
-    this.demolishId = `${mm}-D-${seqStr}-${yy}`;
+    this.demolishId = `${mm}-D-${String(doc.seq).padStart(4, "0")}-${yy}`;
     next();
   } catch (err) {
     next(err);
   }
+});
+
+// NEW: Clear declineReason when status is NOT "declined"
+DemolitionSchema.pre("save", function (next) {
+  if (this.isModified("status")) {
+    if (this.status !== "declined" && this.declineReason) {
+      this.declineReason = null;
+    }
+  }
+  next();
 });
 
 module.exports =
