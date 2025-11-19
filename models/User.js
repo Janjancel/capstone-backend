@@ -1,4 +1,7 @@
 
+
+
+// // models/User.js
 // const mongoose = require("mongoose");
 // const bcrypt = require("bcrypt");
 
@@ -9,7 +12,7 @@
 // });
 // const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
-// // Embedded address schema (NO coordinates here — coordinates are now separate on the user root)
+// // Embedded address schema
 // const addressSchema = new mongoose.Schema({
 //   region: { type: String },
 //   province: { type: String },
@@ -18,20 +21,6 @@
 //   street: { type: String },
 //   houseNo: { type: String },
 //   zipCode: { type: String }
-// }, { _id: false });
-
-// // Reusable coordinates schema constant — lat/lng are integers per your validator
-// const coordinatesSchema = new mongoose.Schema({
-//   lat: {
-//     type: Number,
-//     default: null,
-
-//   },
-//   lng: {
-//     type: Number,
-//     default: null,
-
-//   },
 // }, { _id: false });
 
 // const userSchema = new mongoose.Schema({
@@ -80,12 +69,7 @@
 //   profilePic: {
 //     type: String, // base64 or URL
 //   },
-
-//   // Address (embedded, no coordinates here)
 //   address: addressSchema,
-
-//   // Coordinates grouped under `coordinates` on the user root
-//   coordinates: coordinatesSchema,
 
 //   isVerified: {
 //     type: Boolean,
@@ -159,7 +143,7 @@ const counterSchema = new mongoose.Schema({
 });
 const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
-// Embedded address schema (NO coordinates here — coordinates are separate on the user root)
+// Embedded address schema (NO coordinates here — coordinates are now separate on the user root)
 const addressSchema = new mongoose.Schema({
   region: { type: String },
   province: { type: String },
@@ -167,27 +151,23 @@ const addressSchema = new mongoose.Schema({
   barangay: { type: String },
   street: { type: String },
   houseNo: { type: String },
-  zipCode: { type: String },
+  zipCode: { type: String }
 }, { _id: false });
 
-// Reusable coordinates schema constant — lat/lng are numbers
+// Reusable coordinates schema constant — lat/lng are integers per your validator
 const coordinatesSchema = new mongoose.Schema({
   lat: {
     type: Number,
     default: null,
+
   },
   lng: {
     type: Number,
     default: null,
+
   },
 }, { _id: false });
 
-/**
- * User schema
- * - Adds personalInfo: { lastName, firstName, middleInitial, phoneNumber }
- * - Keeps existing fields: userId (auto-generated), username, email, password, role, status, lastLogin, profilePic
- * - address is embedded, coordinates are on root
- */
 const userSchema = new mongoose.Schema({
   // Custom formatted ID: MM-####-YY
   userId: {
@@ -196,37 +176,6 @@ const userSchema = new mongoose.Schema({
     required: true,
     trim: true,
     match: [/^\d{2}-\d{4}-\d{2}$/, "Invalid ID format (MM-####-YY)"],
-  },
-
-  // Personal info block
-  personalInfo: {
-    lastName: {
-      type: String,
-      required: true,
-      trim: true,
-      minlength: 1,
-    },
-    firstName: {
-      type: String,
-      required: true,
-      trim: true,
-      minlength: 1,
-    },
-    middleInitial: {
-      type: String,
-      trim: true,
-      maxlength: 5, // allow some leeway: single letter or a short initial token
-      default: null,
-    },
-    phoneNumber: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      // Basic E.164-ish validator: optional leading +, then digits (8-15 digits total).
-      // Adjust or remove if you prefer a country-specific format.
-      match: [/^\+?[1-9]\d{7,14}$/, "Invalid phone number format"],
-    },
   },
 
   username: {
@@ -323,7 +272,6 @@ userSchema.methods.comparePassword = function (inputPassword) {
   return bcrypt.compare(inputPassword, this.password);
 };
 
-// Static helper: update status and lastLogin
 userSchema.statics.updateStatus = async function (userId, status) {
   return this.findByIdAndUpdate(
     userId,
