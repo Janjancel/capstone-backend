@@ -442,7 +442,7 @@ router.post("/", upload.array("images"), async (req, res) => {
       address,
       notes,
       // store both for compatibility
-      coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
+      // coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
       coordinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
     });
 
