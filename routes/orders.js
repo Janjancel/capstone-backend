@@ -4,6 +4,7 @@
 // const express = require("express");
 // const router = express.Router();
 // const Order = require("../models/Order");
+// const User = require("../models/User"); // <-- used to fetch user's coordinates
 // const cloudinary = require("../config/cloudinary");
 // const multer = require("multer");
 // const { Readable } = require("stream");
@@ -53,6 +54,34 @@
 //   return getFirstUrl(item?.images) || getFirstUrl(item?.image) || null;
 // }
 // // ---------------------------------------------------------------------
+
+// // Haversine formula to compute distance (in kilometers) between 2 lat/lng pairs
+// function haversineDistanceKm(lat1, lng1, lat2, lng2) {
+//   const toRad = (deg) => (deg * Math.PI) / 180;
+//   const R = 6371; // earth radius km
+//   const dLat = toRad(lat2 - lat1);
+//   const dLng = toRad(lng2 - lng1);
+//   const a =
+//     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+//     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+//     Math.sin(dLng / 2) * Math.sin(dLng / 2);
+//   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+//   return R * c;
+// }
+
+// // Delivery fee logic constants (pivot is Lucena City Hall)
+// const PIVOT = { lat: 13.9365569, lng: 121.6115341 }; // pivot coordinates (Lucena City Hall). Source: coordinates lookup.
+// const FREE_RADIUS_KM = 15;
+// const STEP_KM = 3;
+// const STEP_FEE_PHP = 1000;
+
+// // computeDeliveryFee(distanceInKm) -> number (PHP)
+// function computeDeliveryFee(distanceKm) {
+//   if (!distanceKm || distanceKm <= FREE_RADIUS_KM) return 0;
+//   const extraKm = distanceKm - FREE_RADIUS_KM;
+//   const steps = Math.ceil(extraKm / STEP_KM);
+//   return steps * STEP_FEE_PHP;
+// }
 
 // // Create a new order (with file upload)
 // router.post("/", upload.array("images"), async (req, res) => {
@@ -137,16 +166,70 @@
 
 //     const notes = typeof req.body.notes === "string" ? req.body.notes : "";
 
+//     // 6) Get user's coordinates from DB (fallback to coordinates in req.body)
+//     let userCoords = null;
+//     const userDoc = await User.findOne({ _id: userId }).lean().select("coordinates");
+//     if (userDoc && userDoc.coordinates && userDoc.coordinates.lat != null && userDoc.coordinates.lng != null) {
+//       userCoords = {
+//         lat: Number(userDoc.coordinates.lat),
+//         lng: Number(userDoc.coordinates.lng),
+//       };
+//     } else {
+//       // fallback: allow front-end to pass coordinates in request body
+//       const clientCoords =
+//         typeof req.body.coordinates === "string" ? JSON.parse(req.body.coordinates || "{}") : req.body.coordinates;
+//       if (clientCoords && clientCoords.lat != null && clientCoords.lng != null) {
+//         userCoords = {
+//           lat: Number(clientCoords.lat),
+//           lng: Number(clientCoords.lng),
+//         };
+//       }
+//     }
+
+//     // 7) Compute distance and delivery fee (if user coordinates exist)
+//     let distanceKm = null;
+//     let deliveryFee = 0;
+//     if (userCoords && isFinite(userCoords.lat) && isFinite(userCoords.lng)) {
+//       distanceKm = haversineDistanceKm(PIVOT.lat, PIVOT.lng, userCoords.lat, userCoords.lng);
+//       deliveryFee = computeDeliveryFee(distanceKm);
+//     } else {
+//       // If coordinates missing: default behaviour is 0 fee or you might prefer rejection.
+//       // I will set deliveryFee = 0 and note coordinates missing in the response.
+//       deliveryFee = 0;
+//     }
+
+//     const grandTotal = +(total + deliveryFee).toFixed(2);
+
 //     const newOrder = new Order({
 //       userId,
 //       items,
 //       total,
+//       deliveryFee,
+//       grandTotal,
 //       address,
 //       notes,
+//       // store both for compatibility
+//       // coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
+//       coordinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
 //     });
 
 //     await newOrder.save();
-//     return res.status(201).json(newOrder);
+
+//     // Return some computed fields so frontend can show them immediately
+//     const resp = {
+//       order: newOrder,
+//       meta: {
+//         computed: {
+//           distanceKm: distanceKm != null ? Number(distanceKm.toFixed(3)) : null,
+//           deliveryFee,
+//           grandTotal,
+//           pivot: PIVOT,
+//         },
+//         coordinatesProvided: !!userCoords,
+//       },
+//     };
+
+//     return res.status(201).json(resp);
 //   } catch (error) {
 //     console.error("Order creation error:", error);
 
@@ -232,7 +315,6 @@
 // module.exports = router;
 
 
-
 // routes/orders.js
 const express = require("express");
 const router = express.Router();
@@ -314,6 +396,33 @@ function computeDeliveryFee(distanceKm) {
   const extraKm = distanceKm - FREE_RADIUS_KM;
   const steps = Math.ceil(extraKm / STEP_KM);
   return steps * STEP_FEE_PHP;
+}
+
+/**
+ * computeDiscount(total)
+ * - Rules:
+ *   - total >= 50,000 and < 100,000 => 5%
+ *   - total >= 100,000 and <= 199,999.99 => 8%
+ *   - total >= 200,000 => 10%
+ * - Returns { percent: Number|null, amount: Number|null }
+ */
+function computeDiscount(total) {
+  if (!isFinite(total) || total <= 0) return { percent: null, amount: null };
+
+  let percent = null;
+  if (total >= 200000) {
+    percent = 10;
+  } else if (total >= 100000) {
+    percent = 8;
+  } else if (total >= 50000) {
+    percent = 5;
+  } else {
+    percent = null;
+  }
+
+  if (percent == null) return { percent: null, amount: null };
+  const amount = parseFloat(((percent / 100) * total).toFixed(2));
+  return { percent, amount };
 }
 
 // Create a new order (with file upload)
@@ -431,18 +540,27 @@ router.post("/", upload.array("images"), async (req, res) => {
       deliveryFee = 0;
     }
 
-    const grandTotal = +(total + deliveryFee).toFixed(2);
+    // 8) Compute discount based on "total" (before delivery)
+    const discountInfo = computeDiscount(total); // { percent, amount }
+    // store discount as numeric amount (or null if none)
+    const discountAmount = discountInfo.amount != null ? discountInfo.amount : null;
+    const discountPercent = discountInfo.percent != null ? discountInfo.percent : null;
+
+    // 9) Compute grand total = total - discount + deliveryFee
+    const grandTotal = parseFloat((total - (discountAmount || 0) + deliveryFee).toFixed(2));
 
     const newOrder = new Order({
       userId,
       items,
       total,
       deliveryFee,
+      // store numeric discount amount in model (null when none)
+      discount: discountAmount,
       grandTotal,
       address,
       notes,
       // store both for compatibility
-      // coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
+      coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
       coordinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
     });
 
@@ -455,6 +573,9 @@ router.post("/", upload.array("images"), async (req, res) => {
         computed: {
           distanceKm: distanceKm != null ? Number(distanceKm.toFixed(3)) : null,
           deliveryFee,
+          discountAmount: discountAmount,
+          discountPercent: discountPercent,
+          totalBeforeDiscount: total,
           grandTotal,
           pivot: PIVOT,
         },

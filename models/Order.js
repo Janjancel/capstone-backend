@@ -1,6 +1,5 @@
 
-
-
+// // models/Order.js
 // const mongoose = require("mongoose");
 
 // // --- Counter model (shared, atomic monthly sequences) ---
@@ -23,15 +22,26 @@
 //   userId: String,
 //   items: [
 //     {
+//       id: String,
 //       name: String,
 //       quantity: Number,
 //       price: Number,
+//       subtotal: Number,
 //       image: String, // Cloudinary URL
+//       images: [String],
 //     },
 //   ],
-//   total: Number,
+//   total: Number,             // items subtotal total
+//   deliveryFee: { type: Number, default: 0 }, // computed delivery fee
+//   grandTotal: { type: Number, default: 0 },  // total + deliveryFee
 //   address: Object,
+//   // keep old misspelled field for compatibility
 //   coodrinates: {
+//     lat: Number,
+//     lng: Number,
+//   },
+//   // new correctly spelled coordinates field
+//   coordinates: {
 //     lat: Number,
 //     lng: Number,
 //   },
@@ -42,10 +52,6 @@
 
 // /**
 //  * Auto-generate orderId as MM-O-####-YY
-//  * - MM = current month (01–12)
-//  * - #### = zero-padded monthly sequence
-//  * - YY = last two digits of year
-//  * - 'O' stands for Order
 //  */
 // orderSchema.pre("validate", async function (next) {
 //   try {
@@ -72,7 +78,7 @@
 
 // module.exports = mongoose.models.Order || mongoose.model("Order", orderSchema);
 
-// models/Order.js
+
 const mongoose = require("mongoose");
 
 // --- Counter model (shared, atomic monthly sequences) ---
@@ -106,6 +112,11 @@ const orderSchema = new mongoose.Schema({
   ],
   total: Number,             // items subtotal total
   deliveryFee: { type: Number, default: 0 }, // computed delivery fee
+
+  // new discount field (nullable by default)
+  // store as Number (e.g. amount or percent depending on your application logic)
+  discount: { type: Number, default: null },
+
   grandTotal: { type: Number, default: 0 },  // total + deliveryFee
   address: Object,
   // keep old misspelled field for compatibility
