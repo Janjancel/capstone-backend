@@ -139,7 +139,7 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // =====================
 router.post("/register", register);
 router.post("/login", login);
-router.get("/verify", verifyEmail);
+router.get("/verify", verify);
 
 // =====================
 // Logout
