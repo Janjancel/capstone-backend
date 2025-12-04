@@ -1,7 +1,4 @@
 
-
-
-// // models/User.js
 // const mongoose = require("mongoose");
 // const bcrypt = require("bcrypt");
 
@@ -12,7 +9,7 @@
 // });
 // const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
-// // Embedded address schema
+// // Embedded address schema (NO coordinates here — coordinates are now separate on the user root)
 // const addressSchema = new mongoose.Schema({
 //   region: { type: String },
 //   province: { type: String },
@@ -21,6 +18,20 @@
 //   street: { type: String },
 //   houseNo: { type: String },
 //   zipCode: { type: String }
+// }, { _id: false });
+
+// // Reusable coordinates schema constant — lat/lng are integers per your validator
+// const coordinatesSchema = new mongoose.Schema({
+//   lat: {
+//     type: Number,
+//     default: null,
+
+//   },
+//   lng: {
+//     type: Number,
+//     default: null,
+
+//   },
 // }, { _id: false });
 
 // const userSchema = new mongoose.Schema({
@@ -67,9 +78,14 @@
 //     default: null,
 //   },
 //   profilePic: {
-//     type: String, // base64 or URL
+//     type: String, 
 //   },
+
+//   // Address (embedded, no coordinates here)
 //   address: addressSchema,
+
+//   // Coordinates grouped under `coordinates` on the user root
+//   coordinates: coordinatesSchema,
 
 //   isVerified: {
 //     type: Boolean,
@@ -133,6 +149,7 @@
 // module.exports = mongoose.models.User || mongoose.model("User", userSchema);
 
 
+// models/User.js
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 
@@ -143,7 +160,7 @@ const counterSchema = new mongoose.Schema({
 });
 const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSchema);
 
-// Embedded address schema (NO coordinates here — coordinates are now separate on the user root)
+// Embedded address schema
 const addressSchema = new mongoose.Schema({
   region: { type: String },
   province: { type: String },
@@ -154,22 +171,13 @@ const addressSchema = new mongoose.Schema({
   zipCode: { type: String }
 }, { _id: false });
 
-// Reusable coordinates schema constant — lat/lng are integers per your validator
+// Coordinates schema
 const coordinatesSchema = new mongoose.Schema({
-  lat: {
-    type: Number,
-    default: null,
-
-  },
-  lng: {
-    type: Number,
-    default: null,
-
-  },
+  lat: { type: Number, default: null },
+  lng: { type: Number, default: null },
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
-  // Custom formatted ID: MM-####-YY
   userId: {
     type: String,
     unique: true,
@@ -212,13 +220,11 @@ const userSchema = new mongoose.Schema({
     default: null,
   },
   profilePic: {
-    type: String, // base64 or URL
+    type: String,
+    default: null,
   },
 
-  // Address (embedded, no coordinates here)
   address: addressSchema,
-
-  // Coordinates grouped under `coordinates` on the user root
   coordinates: coordinatesSchema,
 
   isVerified: {
@@ -232,19 +238,15 @@ const userSchema = new mongoose.Schema({
 
 /**
  * Auto-generate userId as MM-####-YY
- * - MM = current month (01-12)
- * - #### = zero-padded monthly sequence
- * - YY = last two digits of year
  */
 userSchema.pre("validate", async function (next) {
   try {
-    if (this.userId) return next(); // respect pre-set IDs (must still match regex)
+    if (this.userId) return next();
 
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, "0");
     const yy = String(now.getFullYear() % 100).padStart(2, "0");
 
-    // One counter per month-year
     const key = `user:${mm}-${yy}`;
     const doc = await Counter.findOneAndUpdate(
       { key },
@@ -267,7 +269,6 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-// Method to compare password
 userSchema.methods.comparePassword = function (inputPassword) {
   return bcrypt.compare(inputPassword, this.password);
 };
