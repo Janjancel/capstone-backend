@@ -1,5 +1,4 @@
 
-
 // // routes/orders.js
 // const express = require("express");
 // const router = express.Router();
@@ -81,6 +80,33 @@
 //   const extraKm = distanceKm - FREE_RADIUS_KM;
 //   const steps = Math.ceil(extraKm / STEP_KM);
 //   return steps * STEP_FEE_PHP;
+// }
+
+// /**
+//  * computeDiscount(total)
+//  * - Rules:
+//  *   - total >= 50,000 and < 100,000 => 5%
+//  *   - total >= 100,000 and <= 199,999.99 => 8%
+//  *   - total >= 200,000 => 10%
+//  * - Returns { percent: Number|null, amount: Number|null }
+//  */
+// function computeDiscount(total) {
+//   if (!isFinite(total) || total <= 0) return { percent: null, amount: null };
+
+//   let percent = null;
+//   if (total >= 200000) {
+//     percent = 10;
+//   } else if (total >= 100000) {
+//     percent = 8;
+//   } else if (total >= 50000) {
+//     percent = 5;
+//   } else {
+//     percent = null;
+//   }
+
+//   if (percent == null) return { percent: null, amount: null };
+//   const amount = parseFloat(((percent / 100) * total).toFixed(2));
+//   return { percent, amount };
 // }
 
 // // Create a new order (with file upload)
@@ -198,18 +224,27 @@
 //       deliveryFee = 0;
 //     }
 
-//     const grandTotal = +(total + deliveryFee).toFixed(2);
+//     // 8) Compute discount based on "total" (before delivery)
+//     const discountInfo = computeDiscount(total); // { percent, amount }
+//     // store discount as numeric amount (or null if none)
+//     const discountAmount = discountInfo.amount != null ? discountInfo.amount : null;
+//     const discountPercent = discountInfo.percent != null ? discountInfo.percent : null;
+
+//     // 9) Compute grand total = total - discount + deliveryFee
+//     const grandTotal = parseFloat((total - (discountAmount || 0) + deliveryFee).toFixed(2));
 
 //     const newOrder = new Order({
 //       userId,
 //       items,
 //       total,
 //       deliveryFee,
+//       // store numeric discount amount in model (null when none)
+//       discount: discountAmount,
 //       grandTotal,
 //       address,
 //       notes,
 //       // store both for compatibility
-//       // coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
+//       coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
 //       coordinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
 //     });
 
@@ -222,6 +257,9 @@
 //         computed: {
 //           distanceKm: distanceKm != null ? Number(distanceKm.toFixed(3)) : null,
 //           deliveryFee,
+//           discountAmount: discountAmount,
+//           discountPercent: discountPercent,
+//           totalBeforeDiscount: total,
 //           grandTotal,
 //           pivot: PIVOT,
 //         },
@@ -314,11 +352,12 @@
 
 // module.exports = router;
 
-
 // routes/orders.js
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const Order = require("../models/Order");
+const Item = require("../models/Item");
 const User = require("../models/User"); // <-- used to fetch user's coordinates
 const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
@@ -332,10 +371,8 @@ const upload = multer({ storage });
 function getFirstUrl(candidate) {
   if (!candidate) return null;
 
-  // string URL
   if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
 
-  // array: strings or nested objects
   if (Array.isArray(candidate)) {
     const found = candidate.find((c) => typeof c === "string" && c.trim().length > 0);
     if (found) return found.trim();
@@ -346,7 +383,6 @@ function getFirstUrl(candidate) {
     return null;
   }
 
-  // object with common keys or nested shapes
   if (typeof candidate === "object") {
     const priorityKeys = ["front", "main", "cover", "primary", "side", "back", "url"];
     for (const k of priorityKeys) {
@@ -365,7 +401,6 @@ function getFirstUrl(candidate) {
 }
 
 function pickImageUrlFromItem(item) {
-  // Prefer images[], then image (object/array/string)
   return getFirstUrl(item?.images) || getFirstUrl(item?.image) || null;
 }
 // ---------------------------------------------------------------------
@@ -385,12 +420,11 @@ function haversineDistanceKm(lat1, lng1, lat2, lng2) {
 }
 
 // Delivery fee logic constants (pivot is Lucena City Hall)
-const PIVOT = { lat: 13.9365569, lng: 121.6115341 }; // pivot coordinates (Lucena City Hall). Source: coordinates lookup.
+const PIVOT = { lat: 13.9365569, lng: 121.6115341 }; // pivot coordinates (Lucena City Hall).
 const FREE_RADIUS_KM = 15;
 const STEP_KM = 3;
 const STEP_FEE_PHP = 1000;
 
-// computeDeliveryFee(distanceInKm) -> number (PHP)
 function computeDeliveryFee(distanceKm) {
   if (!distanceKm || distanceKm <= FREE_RADIUS_KM) return 0;
   const extraKm = distanceKm - FREE_RADIUS_KM;
@@ -400,11 +434,6 @@ function computeDeliveryFee(distanceKm) {
 
 /**
  * computeDiscount(total)
- * - Rules:
- *   - total >= 50,000 and < 100,000 => 5%
- *   - total >= 100,000 and <= 199,999.99 => 8%
- *   - total >= 200,000 => 10%
- * - Returns { percent: Number|null, amount: Number|null }
  */
 function computeDiscount(total) {
   if (!isFinite(total) || total <= 0) return { percent: null, amount: null };
@@ -425,8 +454,17 @@ function computeDiscount(total) {
   return { percent, amount };
 }
 
-// Create a new order (with file upload)
+/**
+ * Create a new order (with optional file upload)
+ * This route will:
+ *  - upload any provided files to Cloudinary,
+ *  - parse order items,
+ *  - atomically decrement Item.quantity for each ordered item inside a transaction,
+ *  - set Item.availability = false when quantity reaches 0,
+ *  - save the Order in the same transaction.
+ */
 router.post("/", upload.array("images"), async (req, res) => {
+  let session;
   try {
     // --- 0) Validate userId presence early
     const userId = req.body.userId;
@@ -462,7 +500,6 @@ router.post("/", upload.array("images"), async (req, res) => {
       return res.status(400).json({ error: "Order must include at least one item." });
     }
 
-    // If we have exactly one uploaded image per item, map by index. Otherwise fallback to item’s own URL.
     const useIndexMapping =
       uploadedItems.length > 0 && uploadedItems.length === rawItems.length;
 
@@ -475,14 +512,13 @@ router.post("/", upload.array("images"), async (req, res) => {
         throw new Error("Each item must include an id.");
       }
 
-      const qty = Number(item.quantity) || 0;
+      const qty = Math.max(0, Number(item.quantity) || 0);
       const price = Number(item.price) || 0;
       const subtotal = +(qty * price).toFixed(2);
 
       const uploadedUrl = useIndexMapping ? uploadedItems[idx] : undefined;
       const normalizedUrl = uploadedUrl || pickImageUrlFromItem(item);
 
-      // images[] optional; include primary if we have it
       const images = [];
       if (normalizedUrl) images.push(normalizedUrl);
 
@@ -493,7 +529,7 @@ router.post("/", upload.array("images"), async (req, res) => {
         price,
         subtotal,
         image: typeof normalizedUrl === "string" ? normalizedUrl : undefined,
-        images, // optional array
+        images,
       };
     });
 
@@ -517,7 +553,6 @@ router.post("/", upload.array("images"), async (req, res) => {
         lng: Number(userDoc.coordinates.lng),
       };
     } else {
-      // fallback: allow front-end to pass coordinates in request body
       const clientCoords =
         typeof req.body.coordinates === "string" ? JSON.parse(req.body.coordinates || "{}") : req.body.coordinates;
       if (clientCoords && clientCoords.lat != null && clientCoords.lng != null) {
@@ -535,66 +570,132 @@ router.post("/", upload.array("images"), async (req, res) => {
       distanceKm = haversineDistanceKm(PIVOT.lat, PIVOT.lng, userCoords.lat, userCoords.lng);
       deliveryFee = computeDeliveryFee(distanceKm);
     } else {
-      // If coordinates missing: default behaviour is 0 fee or you might prefer rejection.
-      // I will set deliveryFee = 0 and note coordinates missing in the response.
       deliveryFee = 0;
     }
 
     // 8) Compute discount based on "total" (before delivery)
-    const discountInfo = computeDiscount(total); // { percent, amount }
-    // store discount as numeric amount (or null if none)
+    const discountInfo = computeDiscount(total);
     const discountAmount = discountInfo.amount != null ? discountInfo.amount : null;
     const discountPercent = discountInfo.percent != null ? discountInfo.percent : null;
 
     // 9) Compute grand total = total - discount + deliveryFee
     const grandTotal = parseFloat((total - (discountAmount || 0) + deliveryFee).toFixed(2));
 
-    const newOrder = new Order({
-      userId,
-      items,
-      total,
-      deliveryFee,
-      // store numeric discount amount in model (null when none)
-      discount: discountAmount,
-      grandTotal,
-      address,
-      notes,
-      // store both for compatibility
-      coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
-      coordinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
-    });
+    //
+    // --- STOCK ADJUSTMENTS + ORDER SAVE (TRANSACTION) ---
+    //
+    // Start a session for transaction (requires replica set)
+    session = await mongoose.startSession();
+    session.startTransaction();
 
-    await newOrder.save();
+    try {
+      // For each ordered item, attempt atomic decrement
+      for (const it of items) {
+        const oid = mongoose.Types.ObjectId.isValid(it.id) ? mongoose.Types.ObjectId(it.id) : it.id;
 
-    // Return some computed fields so frontend can show them immediately
-    const resp = {
-      order: newOrder,
-      meta: {
-        computed: {
-          distanceKm: distanceKm != null ? Number(distanceKm.toFixed(3)) : null,
-          deliveryFee,
-          discountAmount: discountAmount,
-          discountPercent: discountPercent,
-          totalBeforeDiscount: total,
-          grandTotal,
-          pivot: PIVOT,
+        // require positive quantity
+        if (!Number.isInteger(it.quantity) || it.quantity <= 0) {
+          // skip stock change for zero-quantity items; you likely want to reject such orders earlier
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({ error: `Invalid quantity for item ${it.id}` });
+        }
+
+        // Atomically decrement only if there is enough stock
+        const updatedItem = await Item.findOneAndUpdate(
+          { _id: oid, quantity: { $gte: it.quantity } },
+          { $inc: { quantity: -it.quantity } },
+          { new: true, session }
+        );
+
+        if (!updatedItem) {
+          // insufficient stock or item missing -> abort
+          // find the current state for better error message
+          const existing = await Item.findById(oid).session(session).lean();
+          const availableQty = existing ? (existing.quantity ?? 0) : 0;
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({
+            error: "Insufficient stock",
+            itemId: it.id,
+            requested: it.quantity,
+            available: availableQty,
+          });
+        }
+
+        // If quantity reached zero, ensure availability is false
+        if ((updatedItem.quantity === 0) && updatedItem.availability) {
+          // Set availability false (in same session)
+          await Item.updateOne({ _id: updatedItem._id }, { $set: { availability: false } }, { session });
+        }
+      } // end loop items
+
+      // Now create the order within the same session
+      const newOrder = new Order({
+        userId,
+        items,
+        total,
+        deliveryFee,
+        discount: discountAmount,
+        grandTotal,
+        address,
+        notes,
+        coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
+        coordinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
+      });
+
+      await newOrder.save({ session });
+
+      // commit transaction
+      await session.commitTransaction();
+      session.endSession();
+
+      // Return response (order saved). Note: newOrder is the session-saved doc.
+      const resp = {
+        order: newOrder,
+        meta: {
+          computed: {
+            distanceKm: distanceKm != null ? Number(distanceKm.toFixed(3)) : null,
+            deliveryFee,
+            discountAmount: discountAmount,
+            discountPercent: discountPercent,
+            totalBeforeDiscount: total,
+            grandTotal,
+            pivot: PIVOT,
+          },
+          coordinatesProvided: !!userCoords,
         },
-        coordinatesProvided: !!userCoords,
-      },
-    };
+      };
 
-    return res.status(201).json(resp);
+      return res.status(201).json(resp);
+    } catch (txErr) {
+      // abort on any error inside transaction
+      try {
+        await session.abortTransaction();
+      } catch (e) {}
+      session.endSession();
+      console.error("Transaction error:", txErr);
+      // if txErr already sent response earlier, just return generic
+      return res.status(500).json({ error: "Failed to create order (transaction aborted)" });
+    }
   } catch (error) {
+    // If sessions are not supported (e.g., standalone MongoDB) the startSession or transaction may fail.
+    // Fall back: attempt a safe sequential approach with rollback on partial success.
     console.error("Order creation error:", error);
 
-    // Send better messages for common cases
-    if (error.name === "ValidationError") {
-      return res.status(400).json({ error: "Validation failed", details: error.message });
-    }
-    if (error.name === "SyntaxError") {
-      return res.status(400).json({ error: "Bad JSON in payload", details: error.message });
+    // If session was created, ensure it was ended
+    if (session) {
+      try { session.endSession(); } catch (e) {}
     }
 
+    // If the error indicates transactions unsupported, provide a clear message.
+    if (error && /transactions|replica set/i.test(String(error.message || ""))) {
+      return res.status(500).json({
+        error: "Database transactions not supported by current MongoDB deployment. To safely process orders with stock updates enable replica set / use Atlas."
+      });
+    }
+
+    // Generic fallback
     return res.status(500).json({ error: "Failed to create order" });
   }
 });
