@@ -59,6 +59,13 @@
 //     index: true,
 //   },
 
+//   // ✅ NEW: availability flag (default true)
+//   availability: {
+//     type: Boolean,
+//     default: true,
+//     index: true,
+//   },
+
 //   createdAt: { type: Date, default: Date.now, index: true },
 // });
 
@@ -162,6 +169,18 @@ const ItemSchema = new mongoose.Schema({
   availability: {
     type: Boolean,
     default: true,
+    index: true,
+  },
+
+  // ✅ NEW: quantity field (default 1)
+  quantity: {
+    type: Number,
+    default: 1,
+    min: [0, "Quantity cannot be negative"],
+    validate: {
+      validator: Number.isInteger,
+      message: "Quantity must be an integer",
+    },
     index: true,
   },
 
