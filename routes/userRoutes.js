@@ -1,4 +1,5 @@
 
+// // routes/users.js
 // const express = require('express');
 // const router = express.Router();
 // const User = require('../models/User');
@@ -6,9 +7,29 @@
 // const bcrypt = require('bcrypt');
 // const authMiddleware = require('../middleware/authMiddleware');
 
+// // New imports for file handling + cloudinary
+// const multer = require('multer');
+// const streamifier = require('streamifier');
+// const cloudinary = require('../config/cloudinary'); // ensure this exports configured cloudinary.uploader
+
+// // Multer memory storage (files available as buffer)
+// const upload = multer({ storage: multer.memoryStorage() });
+
+// // Stream upload helper (returns secure_url)
+// const streamUpload = (fileBuffer, folder = 'users') =>
+//   new Promise((resolve, reject) => {
+//     const stream = cloudinary.uploader.upload_stream(
+//       { folder },
+//       (error, result) => {
+//         if (result) resolve(result.secure_url);
+//         else reject(error);
+//       }
+//     );
+//     streamifier.createReadStream(fileBuffer).pipe(stream);
+//   });
+
 // // ======================
 // // GET /api/users/statuses
-// // Get status and lastLogin for all users
 // // ======================
 // router.get('/statuses', authMiddleware, async (req, res) => {
 //   try {
@@ -26,7 +47,6 @@
 
 // // ======================
 // // PATCH /api/users/status/:userId
-// // Update user status (online/offline)
 // // ======================
 // router.patch('/status/:userId', authMiddleware, async (req, res) => {
 //   const { status } = req.body;
@@ -45,7 +65,6 @@
 
 // // ======================
 // // PUT /api/users/update-password
-// // Update password for authenticated user
 // // ======================
 // router.put('/update-password', authMiddleware, async (req, res) => {
 //   const { currentPassword, newPassword } = req.body;
@@ -67,7 +86,6 @@
 
 // // ======================
 // // GET /api/users/me
-// // Get profile of authenticated user
 // // ======================
 // router.get("/me", authMiddleware, async (req, res) => {
 //   try {
@@ -82,7 +100,6 @@
 
 // // ======================
 // // GET /api/users/:id
-// // Get user profile by ID
 // // ======================
 // router.get('/:id', authMiddleware, async (req, res) => {
 //   try {
@@ -97,32 +114,76 @@
 
 // // ======================
 // // POST /api/users/upload-profile-picture
+// // Accepts multipart/form-data with `profilePic` (file) OR JSON body with imageBase64.
+// // Uses req.user.id from authMiddleware.
 // // ======================
-// router.post("/upload-profile-picture", authMiddleware, async (req, res) => {
-//   const { userId, imageBase64 } = req.body;
-//   if (!userId || !imageBase64) return res.status(400).json({ message: "Missing userId or image data" });
+// router.post(
+//   "/upload-profile-picture",
+//   authMiddleware,
+//   upload.single('profilePic'),
+//   async (req, res) => {
+//     try {
+//       const userId = req.user.id;
+//       const user = await User.findById(userId);
+//       if (!user) return res.status(404).json({ message: "User not found" });
 
-//   try {
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(404).json({ message: "User not found" });
+//       // 1) Prefer file upload
+//       if (req.file && req.file.buffer) {
+//         try {
+//           const url = await streamUpload(req.file.buffer, 'users/profilePics');
+//           user.profilePic = url;
+//           await user.save();
+//           return res.status(200).json({ message: "Profile picture updated successfully", profilePic: url });
+//         } catch (err) {
+//           console.error("Cloudinary upload error:", err);
+//           return res.status(500).json({ message: "Failed to upload image" });
+//         }
+//       }
 
-//     user.profilePic = imageBase64;
-//     await user.save();
-//     res.status(200).json({ message: "Profile picture updated successfully" });
-//   } catch (error) {
-//     console.error("Upload error:", error);
-//     res.status(500).json({ message: "Server error while uploading profile picture" });
+//       // 2) Fallback: accept base64 in body (imageBase64)
+//       const { imageBase64 } = req.body;
+//       if (imageBase64) {
+//         // imageBase64 should be data URI or raw base64 string
+//         // If data URI, strip prefix
+//         let base64Data = imageBase64;
+//         const matches = base64Data.match(/^data:(image\/\w+);base64,(.+)$/);
+//         if (matches) base64Data = matches[2];
+
+//         const buffer = Buffer.from(base64Data, 'base64');
+//         if (!buffer || buffer.length === 0) {
+//           return res.status(400).json({ message: "Invalid base64 image" });
+//         }
+
+//         try {
+//           const url = await streamUpload(buffer, 'users/profilePics');
+//           user.profilePic = url;
+//           await user.save();
+//           return res.status(200).json({ message: "Profile picture updated successfully", profilePic: url });
+//         } catch (err) {
+//           console.error("Cloudinary upload error:", err);
+//           return res.status(500).json({ message: "Failed to upload image" });
+//         }
+//       }
+
+//       // No image provided
+//       return res.status(400).json({ message: "No image provided. Attach a file field named 'profilePic' or send 'imageBase64' in JSON body." });
+//     } catch (error) {
+//       console.error("Upload error:", error);
+//       res.status(500).json({ message: "Server error while uploading profile picture" });
+//     }
 //   }
-// });
+// );
 
 // // ======================
 // // GET /api/users/admin
-// // Admin-only route example
+// // Admin-only route example (note: ensure Admin model is required if used)
 // // ======================
 // router.get("/admin", authMiddleware, async (req, res) => {
 //   if (req.user.role !== "admin") return res.status(403).json({ message: "Access denied. Admins only." });
 //   try {
-//     const adminData = await Admin.find({});
+//     // If you need Admin data, require the model at top:
+//     // const Admin = require('../models/Admin');
+//     const adminData = []; // placeholder
 //     res.json(adminData);
 //   } catch (err) {
 //     console.error("Error fetching admin data:", err);
@@ -185,7 +246,6 @@
 // module.exports = router;
 
 
-// routes/users.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
@@ -294,6 +354,166 @@ router.get('/:id', authMiddleware, async (req, res) => {
     res.json(user);
   } catch (err) {
     console.error("Error fetching user by ID:", err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// ======================
+// Personal Info routes
+// - POST /api/users/personal-info         (create/set for current user)
+// - GET  /api/users/personal-info         (get current user's personalInfo)
+// - PUT  /api/users/personal-info         (edit current user's personalInfo)
+// - DELETE /api/users/personal-info      (delete current user's personalInfo)
+// Admin variants for operating on other users are also provided.
+// ======================
+
+// Helper validator
+const validatePersonalInfo = (data) => {
+  const { lastName, firstName, middleInitial, phoneNumber } = data;
+  if (!lastName || !firstName) return { valid: false, message: 'firstName and lastName are required.' };
+  if (middleInitial && typeof middleInitial === 'string' && middleInitial.length > 1) return { valid: false, message: 'middleInitial must be a single character.' };
+  if (phoneNumber && !/^\+?[0-9]{7,15}$/.test(phoneNumber)) return { valid: false, message: 'phoneNumber must be digits, optionally starting with +, length 7-15.' };
+  return { valid: true };
+};
+
+// POST - set/create personal info for current user
+router.post('/personal-info', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const validation = validatePersonalInfo(req.body);
+    if (!validation.valid) return res.status(400).json({ message: validation.message });
+
+    user.personalInfo = {
+      lastName: req.body.lastName.trim(),
+      firstName: req.body.firstName.trim(),
+      middleInitial: req.body.middleInitial ? req.body.middleInitial.trim().charAt(0) : null,
+      phoneNumber: req.body.phoneNumber ? req.body.phoneNumber.trim() : null,
+    };
+
+    await user.save();
+    res.status(201).json({ message: 'Personal info saved.', personalInfo: user.personalInfo });
+  } catch (err) {
+    console.error('Error saving personal info:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// GET - current user's personalInfo
+router.get('/personal-info', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('personalInfo');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ personalInfo: user.personalInfo || null });
+  } catch (err) {
+    console.error('Error fetching personal info:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// PUT - update current user's personalInfo
+router.put('/personal-info', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const validation = validatePersonalInfo({
+      lastName: req.body.lastName ?? user.personalInfo?.lastName,
+      firstName: req.body.firstName ?? user.personalInfo?.firstName,
+      middleInitial: req.body.middleInitial ?? user.personalInfo?.middleInitial,
+      phoneNumber: req.body.phoneNumber ?? user.personalInfo?.phoneNumber,
+    });
+    if (!validation.valid) return res.status(400).json({ message: validation.message });
+
+    user.personalInfo = {
+      lastName: req.body.lastName ? req.body.lastName.trim() : user.personalInfo?.lastName,
+      firstName: req.body.firstName ? req.body.firstName.trim() : user.personalInfo?.firstName,
+      middleInitial: req.body.middleInitial ? req.body.middleInitial.trim().charAt(0) : (user.personalInfo?.middleInitial || null),
+      phoneNumber: req.body.phoneNumber ? req.body.phoneNumber.trim() : (user.personalInfo?.phoneNumber || null),
+    };
+
+    await user.save();
+    res.json({ message: 'Personal info updated.', personalInfo: user.personalInfo });
+  } catch (err) {
+    console.error('Error updating personal info:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// DELETE - remove current user's personalInfo
+router.delete('/personal-info', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.personalInfo = undefined; // removes the embedded doc
+    await user.save();
+    res.json({ message: 'Personal info deleted.' });
+  } catch (err) {
+    console.error('Error deleting personal info:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+// ----------------------
+// Admin routes to operate on other users' personal info
+// PUT /api/users/:userId/personal-info
+// DELETE /api/users/:userId/personal-info
+// GET /api/users/:userId/personal-info
+// ----------------------
+
+router.get('/:userId/personal-info', authMiddleware, async (req, res) => {
+  try {
+    // allow admins or the user themself
+    if (req.user.role !== 'admin' && req.user.id !== req.params.userId) return res.status(403).json({ message: 'Access denied.' });
+
+    const user = await User.findById(req.params.userId).select('personalInfo');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ personalInfo: user.personalInfo || null });
+  } catch (err) {
+    console.error('Error fetching other user personal info:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+router.put('/:userId/personal-info', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied. Admins only.' });
+
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const validation = validatePersonalInfo(req.body);
+    if (!validation.valid) return res.status(400).json({ message: validation.message });
+
+    user.personalInfo = {
+      lastName: req.body.lastName.trim(),
+      firstName: req.body.firstName.trim(),
+      middleInitial: req.body.middleInitial ? req.body.middleInitial.trim().charAt(0) : null,
+      phoneNumber: req.body.phoneNumber ? req.body.phoneNumber.trim() : null,
+    };
+
+    await user.save();
+    res.json({ message: 'Personal info updated by admin.', personalInfo: user.personalInfo });
+  } catch (err) {
+    console.error('Admin update personal info error:', err);
+    res.status(500).json({ message: 'Server error.' });
+  }
+});
+
+router.delete('/:userId/personal-info', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied. Admins only.' });
+
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.personalInfo = undefined;
+    await user.save();
+    res.json({ message: 'Personal info deleted by admin.' });
+  } catch (err) {
+    console.error('Admin delete personal info error:', err);
     res.status(500).json({ message: 'Server error.' });
   }
 });
