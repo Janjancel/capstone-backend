@@ -246,6 +246,7 @@
 // module.exports = router;
 
 
+// routes/users.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
@@ -256,7 +257,7 @@ const authMiddleware = require('../middleware/authMiddleware');
 // New imports for file handling + cloudinary
 const multer = require('multer');
 const streamifier = require('streamifier');
-const cloudinary = require('../config/cloudinary'); // ensure this exports configured cloudinary.uploader
+const cloudinary = require('../config/cloudinary'); // must export configured cloudinary.uploader
 
 // Multer memory storage (files available as buffer)
 const upload = multer({ storage: multer.memoryStorage() });
@@ -273,6 +274,35 @@ const streamUpload = (fileBuffer, folder = 'users') =>
     );
     streamifier.createReadStream(fileBuffer).pipe(stream);
   });
+
+// ======================
+// Helper: Validate personalInfo payload
+// ======================
+const validatePersonalInfo = (data) => {
+  const { lastName, firstName, middleInitial, phoneNumber } = data || {};
+  if (!lastName || !firstName) return { valid: false, message: 'firstName and lastName are required.' };
+  if (middleInitial && typeof middleInitial === 'string' && middleInitial.length > 1) return { valid: false, message: 'middleInitial must be a single character.' };
+  if (phoneNumber && !/^\+?[0-9]{7,15}$/.test(phoneNumber)) return { valid: false, message: 'phoneNumber must be digits, optionally starting with +, length 7-15.' };
+  return { valid: true };
+};
+
+// Helper: sanitize & build personalInfo object from payload (partial updates allowed)
+const buildPersonalInfo = (body, existing = {}) => {
+  const out = { ...(existing || {}) };
+
+  if (body.lastName !== undefined && body.lastName !== null) out.lastName = String(body.lastName).trim();
+  if (body.firstName !== undefined && body.firstName !== null) out.firstName = String(body.firstName).trim();
+  if (body.middleInitial !== undefined && body.middleInitial !== null) {
+    const mi = String(body.middleInitial).trim();
+    out.middleInitial = mi.length ? mi.charAt(0) : null;
+  }
+  if (body.phoneNumber !== undefined && body.phoneNumber !== null) {
+    const pn = String(body.phoneNumber).trim();
+    out.phoneNumber = pn.length ? pn : null;
+  }
+
+  return out;
+};
 
 // ======================
 // GET /api/users/statuses
@@ -295,14 +325,14 @@ router.get('/statuses', authMiddleware, async (req, res) => {
 // PATCH /api/users/status/:userId
 // ======================
 router.patch('/status/:userId', authMiddleware, async (req, res) => {
-  const { status } = req.body;
+  const { status } = req.body || {};
   try {
     const user = await User.findById(req.params.userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     user.status = status;
     await user.save();
-    res.json({ message: "Status updated successfully" });
+    res.json({ message: "Status updated successfully", status: user.status });
   } catch (err) {
     console.error("Failed to update user status:", err);
     res.status(500).json({ message: "Server error" });
@@ -313,12 +343,12 @@ router.patch('/status/:userId', authMiddleware, async (req, res) => {
 // PUT /api/users/update-password
 // ======================
 router.put('/update-password', authMiddleware, async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
+  const { currentPassword, newPassword } = req.body || {};
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found." });
 
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    const isMatch = await bcrypt.compare(currentPassword || '', user.password);
     if (!isMatch) return res.status(401).json({ message: "Current password is incorrect." });
 
     user.password = await bcrypt.hash(newPassword, 10);
@@ -359,39 +389,25 @@ router.get('/:id', authMiddleware, async (req, res) => {
 });
 
 // ======================
-// Personal Info routes
-// - POST /api/users/personal-info         (create/set for current user)
-// - GET  /api/users/personal-info         (get current user's personalInfo)
-// - PUT  /api/users/personal-info         (edit current user's personalInfo)
-// - DELETE /api/users/personal-info      (delete current user's personalInfo)
-// Admin variants for operating on other users are also provided.
+// Personal Info routes for current authenticated user
+// POST /personal-info    - set/create
+// GET  /personal-info    - get
+// PUT  /personal-info    - update (partial allowed)
+// DELETE /personal-info  - delete
 // ======================
-
-// Helper validator
-const validatePersonalInfo = (data) => {
-  const { lastName, firstName, middleInitial, phoneNumber } = data;
-  if (!lastName || !firstName) return { valid: false, message: 'firstName and lastName are required.' };
-  if (middleInitial && typeof middleInitial === 'string' && middleInitial.length > 1) return { valid: false, message: 'middleInitial must be a single character.' };
-  if (phoneNumber && !/^\+?[0-9]{7,15}$/.test(phoneNumber)) return { valid: false, message: 'phoneNumber must be digits, optionally starting with +, length 7-15.' };
-  return { valid: true };
-};
 
 // POST - set/create personal info for current user
 router.post('/personal-info', authMiddleware, async (req, res) => {
   try {
+    const body = req.body || {};
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const validation = validatePersonalInfo(req.body);
+    const candidate = buildPersonalInfo(body, user.personalInfo || {});
+    const validation = validatePersonalInfo(candidate);
     if (!validation.valid) return res.status(400).json({ message: validation.message });
 
-    user.personalInfo = {
-      lastName: req.body.lastName.trim(),
-      firstName: req.body.firstName.trim(),
-      middleInitial: req.body.middleInitial ? req.body.middleInitial.trim().charAt(0) : null,
-      phoneNumber: req.body.phoneNumber ? req.body.phoneNumber.trim() : null,
-    };
-
+    user.personalInfo = candidate;
     await user.save();
     res.status(201).json({ message: 'Personal info saved.', personalInfo: user.personalInfo });
   } catch (err) {
@@ -412,27 +428,18 @@ router.get('/personal-info', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT - update current user's personalInfo
+// PUT - update current user's personalInfo (partial allowed)
 router.put('/personal-info', authMiddleware, async (req, res) => {
   try {
+    const body = req.body || {};
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const validation = validatePersonalInfo({
-      lastName: req.body.lastName ?? user.personalInfo?.lastName,
-      firstName: req.body.firstName ?? user.personalInfo?.firstName,
-      middleInitial: req.body.middleInitial ?? user.personalInfo?.middleInitial,
-      phoneNumber: req.body.phoneNumber ?? user.personalInfo?.phoneNumber,
-    });
+    const candidate = buildPersonalInfo(body, user.personalInfo || {});
+    const validation = validatePersonalInfo(candidate);
     if (!validation.valid) return res.status(400).json({ message: validation.message });
 
-    user.personalInfo = {
-      lastName: req.body.lastName ? req.body.lastName.trim() : user.personalInfo?.lastName,
-      firstName: req.body.firstName ? req.body.firstName.trim() : user.personalInfo?.firstName,
-      middleInitial: req.body.middleInitial ? req.body.middleInitial.trim().charAt(0) : (user.personalInfo?.middleInitial || null),
-      phoneNumber: req.body.phoneNumber ? req.body.phoneNumber.trim() : (user.personalInfo?.phoneNumber || null),
-    };
-
+    user.personalInfo = candidate;
     await user.save();
     res.json({ message: 'Personal info updated.', personalInfo: user.personalInfo });
   } catch (err) {
@@ -447,7 +454,7 @@ router.delete('/personal-info', authMiddleware, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    user.personalInfo = undefined; // removes the embedded doc
+    user.personalInfo = undefined;
     await user.save();
     res.json({ message: 'Personal info deleted.' });
   } catch (err) {
@@ -456,17 +463,19 @@ router.delete('/personal-info', authMiddleware, async (req, res) => {
   }
 });
 
-// ----------------------
-// Admin routes to operate on other users' personal info
-// PUT /api/users/:userId/personal-info
-// DELETE /api/users/:userId/personal-info
-// GET /api/users/:userId/personal-info
-// ----------------------
+// ======================
+// Admin/owner routes to operate on other users' personal info
+// - GET /:userId/personal-info
+// - PUT /:userId/personal-info
+// - DELETE /:userId/personal-info
+// Authorization: allowed if req.user.role === 'admin' OR req.user.id === req.params.userId
+// ======================
+
+const canModifyUser = (req) => req.user?.role === 'admin' || req.user?.id === req.params.userId;
 
 router.get('/:userId/personal-info', authMiddleware, async (req, res) => {
   try {
-    // allow admins or the user themself
-    if (req.user.role !== 'admin' && req.user.id !== req.params.userId) return res.status(403).json({ message: 'Access denied.' });
+    if (!canModifyUser(req)) return res.status(403).json({ message: 'Access denied.' });
 
     const user = await User.findById(req.params.userId).select('personalInfo');
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -479,41 +488,37 @@ router.get('/:userId/personal-info', authMiddleware, async (req, res) => {
 
 router.put('/:userId/personal-info', authMiddleware, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied. Admins only.' });
+    if (!canModifyUser(req)) return res.status(403).json({ message: 'Access denied. Admins or owner only.' });
 
+    const body = req.body || {};
     const user = await User.findById(req.params.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const validation = validatePersonalInfo(req.body);
+    const candidate = buildPersonalInfo(body, user.personalInfo || {});
+    const validation = validatePersonalInfo(candidate);
     if (!validation.valid) return res.status(400).json({ message: validation.message });
 
-    user.personalInfo = {
-      lastName: req.body.lastName.trim(),
-      firstName: req.body.firstName.trim(),
-      middleInitial: req.body.middleInitial ? req.body.middleInitial.trim().charAt(0) : null,
-      phoneNumber: req.body.phoneNumber ? req.body.phoneNumber.trim() : null,
-    };
-
+    user.personalInfo = candidate;
     await user.save();
-    res.json({ message: 'Personal info updated by admin.', personalInfo: user.personalInfo });
+    res.json({ message: 'Personal info updated.', personalInfo: user.personalInfo });
   } catch (err) {
-    console.error('Admin update personal info error:', err);
+    console.error('Admin/owner update personal info error:', err);
     res.status(500).json({ message: 'Server error.' });
   }
 });
 
 router.delete('/:userId/personal-info', authMiddleware, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied. Admins only.' });
+    if (!canModifyUser(req)) return res.status(403).json({ message: 'Access denied. Admins or owner only.' });
 
     const user = await User.findById(req.params.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     user.personalInfo = undefined;
     await user.save();
-    res.json({ message: 'Personal info deleted by admin.' });
+    res.json({ message: 'Personal info deleted.' });
   } catch (err) {
-    console.error('Admin delete personal info error:', err);
+    console.error('Admin/owner delete personal info error:', err);
     res.status(500).json({ message: 'Server error.' });
   }
 });
@@ -547,7 +552,7 @@ router.post(
       }
 
       // 2) Fallback: accept base64 in body (imageBase64)
-      const { imageBase64 } = req.body;
+      const { imageBase64 } = req.body || {};
       if (imageBase64) {
         // imageBase64 should be data URI or raw base64 string
         // If data URI, strip prefix
@@ -618,7 +623,7 @@ router.get("/", authMiddleware, async (req, res) => {
 router.patch('/role/:userId', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: "Access denied. Admins only." });
 
-  const { role } = req.body;
+  const { role } = req.body || {};
   try {
     const user = await User.findById(req.params.userId);
     if (!user) return res.status(404).json({ message: "User not found" });
