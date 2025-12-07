@@ -1,4 +1,5 @@
 
+
 // // routes/orders.js
 // const express = require("express");
 // const router = express.Router();
@@ -80,33 +81,6 @@
 //   const extraKm = distanceKm - FREE_RADIUS_KM;
 //   const steps = Math.ceil(extraKm / STEP_KM);
 //   return steps * STEP_FEE_PHP;
-// }
-
-// /**
-//  * computeDiscount(total)
-//  * - Rules:
-//  *   - total >= 50,000 and < 100,000 => 5%
-//  *   - total >= 100,000 and <= 199,999.99 => 8%
-//  *   - total >= 200,000 => 10%
-//  * - Returns { percent: Number|null, amount: Number|null }
-//  */
-// function computeDiscount(total) {
-//   if (!isFinite(total) || total <= 0) return { percent: null, amount: null };
-
-//   let percent = null;
-//   if (total >= 200000) {
-//     percent = 10;
-//   } else if (total >= 100000) {
-//     percent = 8;
-//   } else if (total >= 50000) {
-//     percent = 5;
-//   } else {
-//     percent = null;
-//   }
-
-//   if (percent == null) return { percent: null, amount: null };
-//   const amount = parseFloat(((percent / 100) * total).toFixed(2));
-//   return { percent, amount };
 // }
 
 // // Create a new order (with file upload)
@@ -224,27 +198,18 @@
 //       deliveryFee = 0;
 //     }
 
-//     // 8) Compute discount based on "total" (before delivery)
-//     const discountInfo = computeDiscount(total); // { percent, amount }
-//     // store discount as numeric amount (or null if none)
-//     const discountAmount = discountInfo.amount != null ? discountInfo.amount : null;
-//     const discountPercent = discountInfo.percent != null ? discountInfo.percent : null;
-
-//     // 9) Compute grand total = total - discount + deliveryFee
-//     const grandTotal = parseFloat((total - (discountAmount || 0) + deliveryFee).toFixed(2));
+//     const grandTotal = +(total + deliveryFee).toFixed(2);
 
 //     const newOrder = new Order({
 //       userId,
 //       items,
 //       total,
 //       deliveryFee,
-//       // store numeric discount amount in model (null when none)
-//       discount: discountAmount,
 //       grandTotal,
 //       address,
 //       notes,
 //       // store both for compatibility
-//       coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
+//       // coodrinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
 //       coordinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
 //     });
 
@@ -257,9 +222,6 @@
 //         computed: {
 //           distanceKm: distanceKm != null ? Number(distanceKm.toFixed(3)) : null,
 //           deliveryFee,
-//           discountAmount: discountAmount,
-//           discountPercent: discountPercent,
-//           totalBeforeDiscount: total,
 //           grandTotal,
 //           pivot: PIVOT,
 //         },
@@ -357,11 +319,10 @@
 const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
-const User = require("../models/User"); // used for coordinates / optional populate
+const User = require("../models/User"); // <-- used to fetch user's coordinates
 const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
 const { Readable } = require("stream");
-const mongoose = require("mongoose");
 
 // Multer setup (store file in memory before upload to Cloudinary)
 const storage = multer.memoryStorage();
@@ -424,7 +385,7 @@ function haversineDistanceKm(lat1, lng1, lat2, lng2) {
 }
 
 // Delivery fee logic constants (pivot is Lucena City Hall)
-const PIVOT = { lat: 13.9365569, lng: 121.6115341 }; // pivot coordinates (Lucena City Hall).
+const PIVOT = { lat: 13.9365569, lng: 121.6115341 }; // pivot coordinates (Lucena City Hall). Source: coordinates lookup.
 const FREE_RADIUS_KM = 15;
 const STEP_KM = 3;
 const STEP_FEE_PHP = 1000;
@@ -464,29 +425,13 @@ function computeDiscount(total) {
   return { percent, amount };
 }
 
-// Create a new order (with optional file upload)
+// Create a new order (with file upload)
 router.post("/", upload.array("images"), async (req, res) => {
   try {
-    // --- 0) Validate user presence early (accept either user (ObjectId) or userId (string) )
-    let user = null;
-    let userIdString = null;
-
-    // prefer req.body.user (ObjectId) or req.body.userId (string)
-    if (req.body.user) {
-      // allow string ObjectId or actual ObjectId (from JSON)
-      try {
-        user = mongoose.Types.ObjectId.isValid(req.body.user) ? mongoose.Types.ObjectId(req.body.user) : null;
-      } catch (e) {
-        user = null;
-      }
-    }
-    if (!user && req.body.userId) {
-      userIdString = String(req.body.userId);
-    }
-
-    // If neither provided -> error
-    if (!user && !userIdString) {
-      return res.status(400).json({ error: "Missing user (user _id) or userId (legacy string)" });
+    // --- 0) Validate userId presence early
+    const userId = req.body.userId;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
     }
 
     // 1) Upload any incoming files to Cloudinary
@@ -510,14 +455,8 @@ router.post("/", upload.array("images"), async (req, res) => {
     }
 
     // 2) Parse items payload safely (supports stringified or array)
-    let rawItems = [];
-    if (Array.isArray(req.body.items)) {
-      rawItems = req.body.items;
-    } else if (typeof req.body.items === "string") {
-      rawItems = JSON.parse(req.body.items || "[]");
-    } else {
-      rawItems = [];
-    }
+    const rawItems =
+      Array.isArray(req.body.items) ? req.body.items : JSON.parse(req.body.items || "[]");
 
     if (!Array.isArray(rawItems) || rawItems.length === 0) {
       return res.status(400).json({ error: "Order must include at least one item." });
@@ -571,29 +510,14 @@ router.post("/", upload.array("images"), async (req, res) => {
 
     // 6) Get user's coordinates from DB (fallback to coordinates in req.body)
     let userCoords = null;
-    if (user) {
-      const userDoc = await User.findById(user).lean().select("coordinates userId");
-      if (userDoc) {
-        if (userDoc.coordinates && userDoc.coordinates.lat != null && userDoc.coordinates.lng != null) {
-          userCoords = { lat: Number(userDoc.coordinates.lat), lng: Number(userDoc.coordinates.lng) };
-        }
-        // also set userIdString if we have it available from the user doc (legacy)
-        if (!userIdString && userDoc.userId) userIdString = userDoc.userId;
-      }
-    } else if (userIdString) {
-      // try to find user by legacy userId (optional)
-      const found = await User.findOne({ userId: userIdString }).lean().select("coordinates _id");
-      if (found) {
-        if (found.coordinates && found.coordinates.lat != null && found.coordinates.lng != null) {
-          userCoords = { lat: Number(found.coordinates.lat), lng: Number(found.coordinates.lng) };
-        }
-        // set user (ObjectId) if possible
-        if (!user && found._id) user = found._id;
-      }
-    }
-
-    // fallback: allow front-end to pass coordinates in request body
-    if (!userCoords) {
+    const userDoc = await User.findOne({ _id: userId }).lean().select("coordinates");
+    if (userDoc && userDoc.coordinates && userDoc.coordinates.lat != null && userDoc.coordinates.lng != null) {
+      userCoords = {
+        lat: Number(userDoc.coordinates.lat),
+        lng: Number(userDoc.coordinates.lng),
+      };
+    } else {
+      // fallback: allow front-end to pass coordinates in request body
       const clientCoords =
         typeof req.body.coordinates === "string" ? JSON.parse(req.body.coordinates || "{}") : req.body.coordinates;
       if (clientCoords && clientCoords.lat != null && clientCoords.lng != null) {
@@ -611,25 +535,26 @@ router.post("/", upload.array("images"), async (req, res) => {
       distanceKm = haversineDistanceKm(PIVOT.lat, PIVOT.lng, userCoords.lat, userCoords.lng);
       deliveryFee = computeDeliveryFee(distanceKm);
     } else {
-      // If coordinates missing: default behaviour is 0 fee (kept current behaviour)
+      // If coordinates missing: default behaviour is 0 fee or you might prefer rejection.
+      // I will set deliveryFee = 0 and note coordinates missing in the response.
       deliveryFee = 0;
     }
 
     // 8) Compute discount based on "total" (before delivery)
     const discountInfo = computeDiscount(total); // { percent, amount }
+    // store discount as numeric amount (or null if none)
     const discountAmount = discountInfo.amount != null ? discountInfo.amount : null;
     const discountPercent = discountInfo.percent != null ? discountInfo.percent : null;
 
     // 9) Compute grand total = total - discount + deliveryFee
     const grandTotal = parseFloat((total - (discountAmount || 0) + deliveryFee).toFixed(2));
 
-    // Build order document
-    const orderDoc = new Order({
-      user: user || undefined,
-      userId: userIdString || undefined,
+    const newOrder = new Order({
+      userId,
       items,
       total,
       deliveryFee,
+      // store numeric discount amount in model (null when none)
       discount: discountAmount,
       grandTotal,
       address,
@@ -639,16 +564,11 @@ router.post("/", upload.array("images"), async (req, res) => {
       coordinates: userCoords ? { lat: userCoords.lat, lng: userCoords.lng } : undefined,
     });
 
-    await orderDoc.save();
+    await newOrder.save();
 
-    // Optionally populate the user (light) so frontend can display name/email if needed
-    const populated = await Order.findById(orderDoc._id).populate({
-      path: "user",
-      select: "username email userId profilePic",
-    });
-
+    // Return some computed fields so frontend can show them immediately
     const resp = {
-      order: populated,
+      order: newOrder,
       meta: {
         computed: {
           distanceKm: distanceKm != null ? Number(distanceKm.toFixed(3)) : null,
@@ -674,9 +594,6 @@ router.post("/", upload.array("images"), async (req, res) => {
     if (error.name === "SyntaxError") {
       return res.status(400).json({ error: "Bad JSON in payload", details: error.message });
     }
-    if (error.message && error.message.includes("Each item must include an id")) {
-      return res.status(400).json({ error: error.message });
-    }
 
     return res.status(500).json({ error: "Failed to create order" });
   }
@@ -685,21 +602,7 @@ router.post("/", upload.array("images"), async (req, res) => {
 // Get all orders (admin)
 router.get("/", async (req, res) => {
   try {
-    // optional query params: status, user, limit, skip
-    const filter = {};
-    if (req.query.status) filter.status = req.query.status;
-    if (req.query.user && mongoose.Types.ObjectId.isValid(req.query.user)) filter.user = req.query.user;
-    if (req.query.userId) filter.userId = req.query.userId;
-
-    const limit = Math.min(Number(req.query.limit) || 100, 1000);
-    const skip = Math.max(Number(req.query.skip) || 0, 0);
-
-    const orders = await Order.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate({ path: "user", select: "username email userId" });
-
+    const orders = await Order.find().sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
     console.error("Fetch all orders error:", error);
@@ -707,24 +610,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Get orders for a specific user (by user ObjectId or legacy userId string)
-router.get("/user/:userIdentifier", async (req, res) => {
+// Get orders for a specific user
+router.get("/user/:userId", async (req, res) => {
   try {
-    const identifier = req.params.userIdentifier;
-    const filter = {};
-
-    if (mongoose.Types.ObjectId.isValid(identifier)) {
-      filter.user = identifier;
-    } else {
-      // treat as legacy userId string
-      filter.userId = identifier;
-    }
-
-    const orders = await Order.find(filter).sort({ createdAt: -1 }).populate({
-      path: "user",
-      select: "username email userId",
-    });
-
+    const orders = await Order.find({ userId: req.params.userId }).sort({ createdAt: -1 });
     res.json(orders);
   } catch (error) {
     console.error("Fetch user orders error:", error);
@@ -732,18 +621,10 @@ router.get("/user/:userIdentifier", async (req, res) => {
   }
 });
 
-// Get order by ID (mongoose _id)
+// Get order by ID
 router.get("/:id", async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "Invalid order id" });
-    }
-
-    const order = await Order.findById(req.params.id).populate({
-      path: "user",
-      select: "username email userId",
-    });
-
+    const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: "Order not found" });
     res.json(order);
   } catch (error) {
@@ -756,29 +637,11 @@ router.get("/:id", async (req, res) => {
 router.put("/:id/status", async (req, res) => {
   const { status } = req.body;
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "Invalid order id" });
-    }
-    const validStatuses = [
-      "Pending",
-      "Processing",
-      "Accepted",
-      "On Delivery",
-      "Delivered",
-      "Cancellation Requested",
-      "Cancelled",
-      "Rejected",
-    ];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: "Invalid status" });
-    }
-
     const updatedOrder = await Order.findByIdAndUpdate(
       req.params.id,
       { status },
       { new: true }
-    ).populate({ path: "user", select: "username email userId" });
-
+    );
     if (!updatedOrder) return res.status(404).json({ error: "Order not found" });
     res.json(updatedOrder);
   } catch (error) {
@@ -790,16 +653,11 @@ router.put("/:id/status", async (req, res) => {
 // Request order cancellation
 router.patch("/:id/cancel", async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "Invalid order id" });
-    }
-
     const updatedOrder = await Order.findByIdAndUpdate(
       req.params.id,
       { status: "Cancellation Requested", cancelledAt: new Date() },
       { new: true }
-    ).populate({ path: "user", select: "username email userId" });
-
+    );
     if (!updatedOrder) return res.status(404).json({ error: "Order not found" });
     res.json(updatedOrder);
   } catch (error) {
