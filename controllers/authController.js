@@ -126,118 +126,37 @@ exports.register = async (req, res) => {
 
 
 
-// // Login user
-// exports.login = async (req, res) => {
-//   try {
-//     const { identifier, password } = req.body;
-
-//     if (!identifier || !password) {
-//       return res.status(400).json({ message: 'Email/Username and password are required.' });
-//     }
-
-//     const user = await User.findOne({
-//       $or: [{ email: identifier }, { username: identifier }]
-//     });
-
-//     if (!user) {
-//       return res.status(401).json({ message: 'Invalid credentials.' });
-//     }
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) {
-//       return res.status(401).json({ message: 'Incorrect password.' });
-//     }
-
-//     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-//       expiresIn: '1h',
-//     });
-
-//     // Update status to online and log the login time
-//     user.status = 'online';
-//     user.lastLogin = new Date();
-//     await user.save();
-
-//     res.status(200).json({
-//       token,
-//       user: {
-//         _id: user._id,
-//         email: user.email,
-//         username: user.username,
-//         role: user.role,
-//       },
-//     });
-//   } catch (error) {
-//     console.error('❌ Login error:', error);
-//     res.status(500).json({ message: 'Server error.' });
-//   }
-// };
 // Login user
 exports.login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
     if (!identifier || !password) {
-      return res.status(400).json({ message: "Email/Username and password are required." });
+      return res.status(400).json({ message: 'Email/Username and password are required.' });
     }
 
-    // Search for user by email (case-insensitive) or username
-    const identifierTrimmed = String(identifier).trim();
-    const isEmail = /\S+@\S+\.\S+/.test(identifierTrimmed);
-    let user = null;
-
-    if (isEmail) {
-      // case-insensitive email match
-      user = await User.findOne({ email: { $regex: `^${identifierTrimmed}$`, $options: "i" } });
-    } else {
-      // try username exact match first, then try email fallback
-      user = await User.findOne({ username: identifierTrimmed }) || await User.findOne({ email: { $regex: `^${identifierTrimmed}$`, $options: "i" } });
-    }
+    const user = await User.findOne({
+      $or: [{ email: identifier }, { username: identifier }]
+    });
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid credentials." });
+      return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
-    // If you have email verification: check and return helpful error
-    if (user.isVerified === false) {
-      return res.status(403).json({ message: "Account not verified. Please verify your email." });
-    }
-
-    // Compare password
-    let isMatch = false;
-    if (user.password) {
-      try {
-        // bcrypt.compare returns false if not a valid hash or doesn't match
-        isMatch = await bcrypt.compare(password, user.password);
-      } catch (compareErr) {
-        // If compare throws (malformed hash) fall through to fallback
-        console.warn("bcrypt compare error (falling back):", compareErr);
-        isMatch = false;
-      }
-    }
-
-    // Fallback for legacy/plain-text passwords (ONLY if bcrypt compare failed)
-    if (!isMatch && user.password && (password === user.password)) {
-      // plain equality (legacy) -> treat as match but log a warning
-      console.warn(`Legacy plaintext password detected for user ${user._id}. Consider migrating to hashed passwords.`);
-      isMatch = true;
-    }
-
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Incorrect password." });
+      return res.status(401).json({ message: 'Incorrect password.' });
     }
 
-    // Sign JWT (adjust payload claims as needed)
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || "1h",
+      expiresIn: '1h',
     });
 
     // Update status to online and log the login time
-    user.status = "online";
+    user.status = 'online';
     user.lastLogin = new Date();
-    // don't store token on user document here (unless you want refresh tokens)
     await user.save();
 
-    // Respond with token and minimal user data
     res.status(200).json({
       token,
       user: {
@@ -245,16 +164,13 @@ exports.login = async (req, res) => {
         email: user.email,
         username: user.username,
         role: user.role,
-        // add other safe public fields if needed:
-        // avatar: user.avatar,
       },
     });
   } catch (error) {
-    console.error("❌ Login error:", error);
-    res.status(500).json({ message: "Server error." });
+    console.error('❌ Login error:', error);
+    res.status(500).json({ message: 'Server error.' });
   }
 };
-
 
 exports.verifyEmail = async (req, res) => {
   try {
