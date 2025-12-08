@@ -36,46 +36,92 @@ const crypto = require("crypto");
 const sendEmail = require("../utils/sendEmail");
 // const User = require("../models/User"); // Make sure this is included
 
+// exports.register = async (req, res) => {
+//   try {
+//     const { username, email, password } = req.body;
+
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) return res.status(400).json({ message: "Email already registered." });
+
+//     const verificationToken = crypto.randomBytes(32).toString("hex");
+
+//     const newUser = new User({
+//       username,
+//       email,
+//       password,
+//       isVerified: false,
+//       verificationToken,
+//     });
+
+//     await newUser.save();
+
+//     const link = `${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=yes`;
+
+
+//     await sendEmail(
+//       newUser.email,
+//       "Verify Your Email",
+//       `
+//         <p>We received a request to verify your account.</p>
+//         <a href="${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=yes" style="margin-right:10px;">✅ Yes, it's me</a>
+//         <a href="${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=no">❌ No, it's not me</a>
+//       `
+//     );
+
+//     res.status(200).json({ message: "Verification email sent. Please check your inbox." });
+//   } catch (error) {
+//     console.error("❌ Registration error:", error);
+//     res.status(500).json({ message: "Server error." });
+//   }
+// };
+
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
+    // simple validation
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "Username, email and password are required." });
+    }
+
+    // check existing email
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ message: "Email already registered." });
 
-    const verificationToken = crypto.randomBytes(32).toString("hex");
+    // hash password
+    const saltRounds = Number(process.env.SALT_ROUNDS) || 10;
+    const hashed = await bcrypt.hash(password, saltRounds);
 
+    // create user (no verification token)
     const newUser = new User({
       username,
       email,
-      password,
-      isVerified: false,
-      verificationToken,
+      password: hashed,
+      isVerified: true, // set true for "pure registration" (change if you want false)
     });
 
     await newUser.save();
 
-    const link = `${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=yes`;
+    // optionally generate a JWT token and return it
+    const tokenPayload = { id: newUser._id, email: newUser.email, username: newUser.username };
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET || "change_this_secret", {
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    });
 
+    // remove password before returning user object
+    const userToReturn = newUser.toObject();
+    delete userToReturn.password;
 
-    await sendEmail(
-      newUser.email,
-      "Verify Your Email",
-      `
-        <p>We received a request to verify your account.</p>
-        <a href="${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=yes" style="margin-right:10px;">✅ Yes, it's me</a>
-        <a href="${process.env.CLIENT_URL}/verify?token=${verificationToken}&email=${newUser.email}&confirm=no">❌ No, it's not me</a>
-      `
-    );
-
-    res.status(200).json({ message: "Verification email sent. Please check your inbox." });
+    res.status(201).json({
+      message: "Registration successful.",
+      user: userToReturn,
+      token,
+    });
   } catch (error) {
     console.error("❌ Registration error:", error);
     res.status(500).json({ message: "Server error." });
   }
 };
-
-
 
 
 
