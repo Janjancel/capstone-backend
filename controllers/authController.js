@@ -124,112 +124,53 @@ exports.register = async (req, res) => {
 };
 
 
+
+
+// Login user
 exports.login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
     if (!identifier || !password) {
-      return res.status(400).json({ message: "Email/Username and password are required." });
+      return res.status(400).json({ message: 'Email/Username and password are required.' });
     }
 
-    // select password explicitly to ensure it's available even if schema later hides it
     const user = await User.findOne({
-      $or: [{ email: identifier }, { username: identifier }],
-    }).select("+password");
+      $or: [{ email: identifier }, { username: identifier }]
+    });
 
     if (!user) {
-      console.warn(`Auth: login attempt - user not found for identifier='${identifier}'`);
-      return res.status(401).json({ message: "Invalid credentials." });
+      return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
-    // Prefer using the model method (already defined in your model)
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.warn(`Auth: login attempt - invalid password for userId='${user._id}'`);
-      return res.status(401).json({ message: "Invalid credentials." });
-    }
-
-    if (!process.env.JWT_SECRET) {
-      console.error("Auth: JWT_SECRET not defined in environment");
-      return res.status(500).json({ message: "Server configuration error." });
+      return res.status(401).json({ message: 'Incorrect password.' });
     }
 
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: '1h',
     });
 
     // Update status to online and log the login time
-    user.status = "online";
+    user.status = 'online';
     user.lastLogin = new Date();
-
-    // Save user (note: password remains hashed and schema may enforce select:false)
     await user.save();
 
-    // Build safe user object (omit password)
-    const safeUser = {
-      _id: user._id,
-      userId: user.userId,
-      email: user.email,
-      username: user.username,
-      role: user.role,
-      status: user.status,
-      lastLogin: user.lastLogin,
-      profilePic: user.profilePic || null,
-      isVerified: user.isVerified || false,
-    };
-
-    return res.status(200).json({ token, user: safeUser });
+    res.status(200).json({
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+      },
+    });
   } catch (error) {
-    console.error("❌ Login error:", error);
-    return res.status(500).json({ message: "Server error." });
+    console.error('❌ Login error:', error);
+    res.status(500).json({ message: 'Server error.' });
   }
 };
-
-// // Login user
-// exports.login = async (req, res) => {
-//   try {
-//     const { identifier, password } = req.body;
-
-//     if (!identifier || !password) {
-//       return res.status(400).json({ message: 'Email/Username and password are required.' });
-//     }
-
-//     const user = await User.findOne({
-//       $or: [{ email: identifier }, { username: identifier }]
-//     });
-
-//     if (!user) {
-//       return res.status(401).json({ message: 'Invalid credentials.' });
-//     }
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) {
-//       return res.status(401).json({ message: 'Incorrect password.' });
-//     }
-
-//     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-//       expiresIn: '1h',
-//     });
-
-//     // Update status to online and log the login time
-//     user.status = 'online';
-//     user.lastLogin = new Date();
-//     await user.save();
-
-//     res.status(200).json({
-//       token,
-//       user: {
-//         _id: user._id,
-//         email: user.email,
-//         username: user.username,
-//         role: user.role,
-//       },
-//     });
-//   } catch (error) {
-//     console.error('❌ Login error:', error);
-//     res.status(500).json({ message: 'Server error.' });
-//   }
-// };
 
 exports.verifyEmail = async (req, res) => {
   try {
