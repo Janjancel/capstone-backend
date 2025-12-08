@@ -278,13 +278,21 @@ const streamUpload = (fileBuffer, folder = 'users') =>
 // ======================
 // Helper: Validate personalInfo payload
 // ======================
-const validatePersonalInfo = (data) => {
+// authRoutes (or helper module)
+const validatePersonalInfo = (data, opts = { requireNames: true }) => {
   const { lastName, firstName, middleInitial, phoneNumber } = data || {};
-  if (!lastName || !firstName) return { valid: false, message: 'firstName and lastName are required.' };
+  if (opts.requireNames && (!lastName || !firstName)) return { valid: false, message: 'firstName and lastName are required.' };
   if (middleInitial && typeof middleInitial === 'string' && middleInitial.length > 1) return { valid: false, message: 'middleInitial must be a single character.' };
   if (phoneNumber && !/^\+?[0-9]{7,15}$/.test(phoneNumber)) return { valid: false, message: 'phoneNumber must be digits, optionally starting with +, length 7-15.' };
   return { valid: true };
 };
+// const validatePersonalInfo = (data) => {
+//   const { lastName, firstName, middleInitial, phoneNumber } = data || {};
+//   if (!lastName || !firstName) return { valid: false, message: 'firstName and lastName are required.' };
+//   if (middleInitial && typeof middleInitial === 'string' && middleInitial.length > 1) return { valid: false, message: 'middleInitial must be a single character.' };
+//   if (phoneNumber && !/^\+?[0-9]{7,15}$/.test(phoneNumber)) return { valid: false, message: 'phoneNumber must be digits, optionally starting with +, length 7-15.' };
+//   return { valid: true };
+// };
 
 // Helper: sanitize & build personalInfo object from payload (partial updates allowed)
 const buildPersonalInfo = (body, existing = {}) => {

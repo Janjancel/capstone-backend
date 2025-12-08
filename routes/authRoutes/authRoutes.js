@@ -232,11 +232,10 @@ const generateToken = (user) => {
 //   }
 // });
 
+
 router.post("/google", async (req, res) => {
   const { token: googleToken } = req.body;
-
-  if (!googleToken) 
-    return res.status(400).json({ message: "No token provided." });
+  if (!googleToken) return res.status(400).json({ message: "No token provided." });
 
   try {
     // Verify Google ID token
@@ -245,34 +244,81 @@ router.post("/google", async (req, res) => {
       audience: process.env.GOOGLE_CLIENT_ID,
     });
 
-    const payload = ticket.getPayload();
-    const email = payload.email.toLowerCase(); // ✅ lowercase
-    const { name, picture } = payload;
+    const payload = ticket.getPayload() || {};
+    const email = (payload.email || "").toLowerCase();
+    // prefer structured fields, fall back to name parsing
+    const googleGiven = payload.given_name || (payload.name ? payload.name.split(" ")[0] : "") || "";
+    const googleFamily = payload.family_name || (payload.name ? payload.name.split(" ").slice(-1)[0] : "") || "";
+    const googlePicture = payload.picture || "";
+    const googleId = payload.sub || "";
 
-    // Find existing user
+    // Find existing user by email
     let user = await User.findOne({ email });
 
+    // Helper to ensure personalInfo exists and has empty-string defaults for missing keys
+    const ensurePersonalInfo = (existing = {}) => {
+      return {
+        firstName: (existing.firstName ?? "") || "",
+        lastName:  (existing.lastName ?? "") || "",
+        middleInitial: (existing.middleInitial ?? "") || "",
+        phoneNumber: (existing.phoneNumber ?? "") || "",
+      };
+    };
+
     if (!user) {
+      // Build a resilient username:
+      // use googleId if available (prefixed), else use sanitized email/localpart, else timestamp fallback
+      const usernameFromEmail = email ? email.split("@")[0].replace(/\W+/g, "") : "";
+      const username = googleId ? `g_${googleId}` : (usernameFromEmail || `g_${Date.now()}`);
+
       // Create a new user if not exists
       user = new User({
-        username: name.replace(/\s+/g, "").toLowerCase(),
+        username,
         email,
-        password: Math.random().toString(36).slice(-8), // random password
+        // random password so schema hash middleware still runs; if you treat OAuth-only accounts specially, consider a different approach
+        password: Math.random().toString(36).slice(-12),
         isVerified: true,
-        profilePic: picture,
+        profilePic: googlePicture || null,
+        role: "client",
+        status: "offline",
+        personalInfo: {
+          firstName: googleGiven || "",
+          lastName: googleFamily || "",
+          middleInitial: "",
+          phoneNumber: "",
+        },
       });
+
       await user.save();
+    } else {
+      // If user exists, ensure personalInfo object exists and missing fields are set to ""
+      const updatedPI = ensurePersonalInfo(user.personalInfo || {});
+      // If Google's payload contains names and user has empty strings, fill them (but do NOT overwrite non-empty values)
+      if (!updatedPI.firstName && googleGiven) updatedPI.firstName = googleGiven;
+      if (!updatedPI.lastName && googleFamily)  updatedPI.lastName  = googleFamily;
+
+      // detect change
+      const piChanged =
+        (user.personalInfo?.firstName ?? "") !== updatedPI.firstName ||
+        (user.personalInfo?.lastName ?? "") !== updatedPI.lastName ||
+        (user.personalInfo?.middleInitial ?? "") !== updatedPI.middleInitial ||
+        (user.personalInfo?.phoneNumber ?? "") !== updatedPI.phoneNumber;
+
+      if (piChanged) {
+        user.personalInfo = updatedPI;
+        await user.save();
+      }
     }
 
-    // Generate JWT token
-    const jwtToken = generateToken(user);
-
-    // Update status to online and log last login
+    // Update status and lastLogin, then save (if changed)
     user.status = "online";
     user.lastLogin = new Date();
     await user.save();
 
-    // Respond with token and user info
+    // Generate JWT token (use a sanitized user payload — don't include password)
+    const jwtToken = generateToken(user);
+
+    // Respond with token and sanitized user info
     res.status(200).json({
       token: jwtToken,
       user: {
@@ -283,6 +329,12 @@ router.post("/google", async (req, res) => {
         status: user.status,
         profilePic: user.profilePic,
         lastLogin: user.lastLogin,
+        personalInfo: user.personalInfo || {
+          firstName: "",
+          lastName: "",
+          middleInitial: "",
+          phoneNumber: "",
+        },
       },
     });
   } catch (err) {
@@ -292,5 +344,65 @@ router.post("/google", async (req, res) => {
 });
 
 
-module.exports = router;
+// router.post("/google", async (req, res) => {
+//   const { token: googleToken } = req.body;
+
+//   if (!googleToken) 
+//     return res.status(400).json({ message: "No token provided." });
+
+//   try {
+//     // Verify Google ID token
+//     const ticket = await client.verifyIdToken({
+//       idToken: googleToken,
+//       audience: process.env.GOOGLE_CLIENT_ID,
+//     });
+
+//     const payload = ticket.getPayload();
+//     const email = payload.email.toLowerCase(); // ✅ lowercase
+//     const { name, picture } = payload;
+
+//     // Find existing user
+//     let user = await User.findOne({ email });
+
+//     if (!user) {
+//       // Create a new user if not exists
+//       user = new User({
+//         username: name.replace(/\s+/g, "").toLowerCase(),
+//         email,
+//         password: Math.random().toString(36).slice(-8), // random password
+//         isVerified: true,
+//         profilePic: picture,
+//       });
+//       await user.save();
+//     }
+
+//     // Generate JWT token
+//     const jwtToken = generateToken(user);
+
+//     // Update status to online and log last login
+//     user.status = "online";
+//     user.lastLogin = new Date();
+//     await user.save();
+
+//     // Respond with token and user info
+//     res.status(200).json({
+//       token: jwtToken,
+//       user: {
+//         _id: user._id,
+//         email: user.email,
+//         username: user.username,
+//         role: user.role,
+//         status: user.status,
+//         profilePic: user.profilePic,
+//         lastLogin: user.lastLogin,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("Google login error:", err);
+//     res.status(500).json({ message: "Google authentication failed." });
+//   }
+// });
+
+
+// module.exports = router;
 

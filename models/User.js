@@ -312,10 +312,14 @@ const coordinatesSchema = new mongoose.Schema({
 
 // Personal info (new)
 const personalInfoSchema = new mongoose.Schema({
-  lastName: { type: String, trim: true, required: true },
-  firstName: { type: String, trim: true, required: true },
-  middleInitial: { type: String, trim: true, maxlength: 1, default: null },
-  phoneNumber: { type: String, trim: true, default: null },
+  // lastName: { type: String, trim: true, required: false },
+  // firstName: { type: String, trim: true, required: false },
+  // middleInitial: { type: String, trim: true, maxlength: 1, default: null },
+  // phoneNumber: { type: String, trim: true, default: null },
+  lastName:  { type: String, trim: true, default: "" },
+  firstName: { type: String, trim: true, default: "" },
+  middleInitial: { type: String, trim: true, maxlength: 1, default: "" },
+  phoneNumber: { type: String, trim: true, default: "" },
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
