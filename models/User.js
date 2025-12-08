@@ -319,7 +319,7 @@ const personalInfoSchema = new mongoose.Schema({
   lastName:  { type: String, trim: true, default: "" },
   firstName: { type: String, trim: true, default: "" },
   middleInitial: { type: String, trim: true, maxlength: 1, default: "" },
-  phoneNumber: { type: String, trim: true, default: "" },
+  phoneNumber: { type: Number, trim: true, default: 0 },
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
