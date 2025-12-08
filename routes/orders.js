@@ -665,7 +665,8 @@ router.post("/", upload.array("images"), async (req, res) => {
     try {
       // For each ordered item, attempt atomic decrement
       for (const it of items) {
-        const oid = mongoose.Types.ObjectId.isValid(it.id) ? mongoose.Types.ObjectId(it.id) : it.id;
+        // Use 'new' to construct ObjectId properly
+        const oid = mongoose.Types.ObjectId.isValid(it.id) ? new mongoose.Types.ObjectId(it.id) : it.id;
 
         // require positive quantity
         if (!Number.isInteger(it.quantity) || it.quantity <= 0) {
