@@ -1,4 +1,5 @@
 
+
 // const mongoose = require("mongoose");
 
 // // Shared monthly counter (atomic)
@@ -12,13 +13,13 @@
 // const CATEGORIES = [
 //   "Table",
 //   "Chair",
-//   "Flooring",
+//   "Flooring",//remove
 //   "Cabinet",
 //   "Post",
 //   "Scraps",
 //   "Stones",
-//   "Windows",
-//   "Bed",
+//   "Windows", //railings, doors, others+-
+//   "Bed", //bed
 //   "Uncategorized", // keep as default option
 // ];
 
@@ -63,6 +64,18 @@
 //   availability: {
 //     type: Boolean,
 //     default: true,
+//     index: true,
+//   },
+
+//   // ✅ NEW: quantity field (default 1)
+//   quantity: {
+//     type: Number,
+//     default: 1,
+//     min: [0, "Quantity cannot be negative"],
+//     validate: {
+//       validator: Number.isInteger,
+//       message: "Quantity must be an integer",
+//     },
 //     index: true,
 //   },
 
@@ -118,13 +131,14 @@ const Counter = mongoose.models.Counter || mongoose.model("Counter", counterSche
 const CATEGORIES = [
   "Table",
   "Chair",
-  "Flooring",
   "Cabinet",
   "Post",
   "Scraps",
   "Stones",
   "Windows",
-  "Bed",
+  "Railings", // added
+  "Doors",    // added
+  "Others",   // added
   "Uncategorized", // keep as default option
 ];
 
